@@ -1,56 +1,51 @@
 import os
 from datetime import datetime
 from pyrogram import Client, filters
+from pytgcalls import PyTgCalls
 import subprocess
-import os
 from flask import Flask
+from threading import Thread
 
+# قراءة متغيرات البيئة من Render
+API_ID = int(os.environ.get("API_ID"))
+API_HASH = os.environ.get("API_HASH")
+CHANNEL_ID = os.environ.get("CHANNEL_ID")
+GROUP_ID = os.environ.get("GROUP_ID")
+SESSION_STRING = os.environ.get("SESSION_STRING")  # تأكد من إضافته في المتغيرات
+PORT = int(os.environ.get("PORT", 10000))  # default 10000
+
+# إعداد Pyrogram Userbot
+app = Client(name="userbot", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING)
+pytgcalls = PyTgCalls(app)
+
+# إعداد Flask لتجنب حاجة الـ Worker في Render
 app_flask = Flask(__name__)
 
-# ===========================
-# قراءة متغيرات البيئة
-# ===========================
-API_ID = int(os.getenv("API_ID"))
-API_HASH = os.getenv("API_HASH")
-CHANNEL_ID = os.getenv("CHANNEL_ID")      # @اسم القناة
-GROUP_ID = os.getenv("GROUP_ID")          # @اسم المجموعة
-SESSION_STRING = os.getenv("SESSION_STRING")  # Session String userbot
+@app_flask.route("/")
+def home():
+    return "Userbot is running"
 
-# ===========================
-# إعداد Userbot باستخدام SESSION_STRING
-# ===========================
-app = Client(
-    session_string=SESSION_STRING,
-    api_id=API_ID,
-    api_hash=API_HASH
-)
-
-# ===========================
-# متغيرات التحكم بالتسجيل
-# ===========================
+# متغيرات التحكم
 is_recording = False
 current_title = ""
 current_file = ""
 
-# ===========================
 # تنظيف العنوان ليكون اسم ملف صالح
-# ===========================
 def sanitize_filename(s: str) -> str:
     return "".join(c for c in s if c.isalnum() or c in " _-").strip().replace(" ", "_")
 
-# ===========================
 # التحقق إذا المستخدم مشرف
-# ===========================
 async def is_user_admin(chat_id, user_id):
     admins = await app.get_chat_members(chat_id, filter="administrators")
     return any(a.user.id == user_id for a in admins)
 
-# ===========================
 # أمر بدء التسجيل
-# ===========================
-@app.on_message(filters.chat(GROUP_ID) & filters.text)
+@app.on_message(filters.group & filters.text)
 async def start_record(client, message):
     global is_recording, current_title, current_file
+
+    if str(message.chat.id) != str(GROUP_ID):
+        return
 
     if not await is_user_admin(message.chat.id, message.from_user.id):
         await message.reply("❌ ليس لديك صلاحية استخدام هذا الأمر.")
@@ -68,12 +63,13 @@ async def start_record(client, message):
         is_recording = True
         await message.reply(f"✅ بدأ التسجيل: {title}")
 
-# ===========================
 # أمر إيقاف التسجيل
-# ===========================
-@app.on_message(filters.chat(GROUP_ID) & filters.text)
+@app.on_message(filters.group & filters.text)
 async def stop_record(client, message):
     global is_recording, current_title, current_file
+
+    if str(message.chat.id) != str(GROUP_ID):
+        return
 
     if not await is_user_admin(message.chat.id, message.from_user.id):
         await message.reply("❌ ليس لديك صلاحية استخدام هذا الأمر.")
@@ -86,7 +82,7 @@ async def stop_record(client, message):
 
         is_recording = False
 
-        # تحويل raw إلى mp3 باستخدام ffmpeg
+        # تحويل raw إلى mp3
         mp3_file = current_file.replace(".raw", ".mp3")
         subprocess.run(["ffmpeg", "-y", "-i", current_file, "-vn", "-codec:a", "libmp3lame", "-qscale:a", "2", mp3_file])
 
@@ -100,17 +96,10 @@ async def stop_record(client, message):
 
         await message.reply(f"✅ تم إيقاف التسجيل وحفظ الملف: {current_title}")
 
-# ===========================
-# تشغيل اليوزر بوت
-# ===========================
+print("✅ اليوزر بوت جاهز للعمل")
 
-@app_flask.route("/")
-def home():
-    return "Userbot is running"
+# تشغيل Flask في Thread لتجنب مشكلة Render Worker
+Thread(target=lambda: app_flask.run(host="0.0.0.0", port=PORT)).start()
 
-if __name__ == "__main__":
-    from threading import Thread
-    Thread(target=lambda: app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))).start()
-    # تشغيل اليوزربوت
-    app.run()  # هذا من Pyrogram
-
+# تشغيل Pyrogram Userbot
+app.run()
