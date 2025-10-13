@@ -1,4 +1,4 @@
-pyrogram>=2.1.0
+pyrogram==2.0.36
 tgcrypto
 git+https://github.com/pytgcalls/pytgcalls@master
 python-dotenv==1.0.0
