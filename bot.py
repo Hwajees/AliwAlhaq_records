@@ -5,7 +5,7 @@ from threading import Thread
 
 from flask import Flask
 from pyrogram import Client, filters
-from pytgcalls import PyTgCalls
+from pytgcalls import GroupCallFactory
 
 # -----------------------------
 # قراءة متغيرات البيئة
@@ -21,7 +21,7 @@ PORT = int(os.environ.get("PORT", 10000))  # الافتراضي 10000
 # تهيئة البوت والاتصال
 # -----------------------------
 app = Client(name="userbot", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING)
-pytgcalls = PyTgCalls(app)
+pytgcalls = GroupCallFactory(app).get_group_call()
 
 # -----------------------------
 # Flask للحفاظ على التشغيل
