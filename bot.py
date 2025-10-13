@@ -5,7 +5,7 @@ from threading import Thread
 
 from flask import Flask
 from pyrogram import Client, filters
-from pytgcalls import PyTgCall
+from pytgcalls import PyTgCalls
 
 # -----------------------------
 # قراءة متغيرات البيئة من Render
