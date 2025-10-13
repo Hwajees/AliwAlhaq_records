@@ -5,7 +5,7 @@ from threading import Thread
 
 from flask import Flask
 from pyrogram import Client, filters
-from pytgcalls import PyTgCalls
+from pytgcalls import PyTgCall
 
 # -----------------------------
 # قراءة متغيرات البيئة من Render
@@ -13,15 +13,15 @@ from pytgcalls import PyTgCalls
 API_ID = int(os.environ.get("API_ID"))
 API_HASH = os.environ.get("API_HASH")
 SESSION_STRING = os.environ.get("SESSION_STRING")
-CHANNEL_ID = os.environ.get("CHANNEL_ID")  # يمكن أن يكون رقم أو username
-GROUP_ID = os.environ.get("GROUP_ID")
-PORT = int(os.environ.get("PORT", 10000))  # البورت حسب المتغير
+CHANNEL_ID = int(os.environ.get("CHANNEL_ID"))  # تأكد أنه رقم وليس @username
+GROUP_ID = int(os.environ.get("GROUP_ID"))
+PORT = int(os.environ.get("PORT", 10000))
 
 # -----------------------------
 # إعداد Pyrogram و PyTgCalls
 # -----------------------------
 app = Client(SESSION_STRING, api_id=API_ID, api_hash=API_HASH)
-pytgcalls = PyTgCalls(app)
+pytgcalls = PyTgCall(app)
 
 # -----------------------------
 # Flask لمراقبة البوت
@@ -40,11 +40,9 @@ current_title = ""
 current_file = ""
 
 def sanitize_filename(s: str) -> str:
-    """تنظيف اسم الملف ليكون صالح للنظام."""
     return "".join(c for c in s if c.isalnum() or c in " _-").strip().replace(" ", "_")
 
 async def is_user_admin(chat_id, user_id):
-    """التحقق إذا كان المستخدم مشرف في المجموعة."""
     admins = [a async for a in app.get_chat_members(chat_id, filter="administrators")]
     return any(a.user.id == user_id for a in admins)
 
@@ -56,9 +54,6 @@ async def handle_messages(client, message):
     global is_recording, current_title, current_file
 
     if str(message.chat.id) != str(GROUP_ID):
-        return
-
-    if message.from_user is None:
         return
 
     if not await is_user_admin(message.chat.id, message.from_user.id):
@@ -87,7 +82,6 @@ async def handle_messages(client, message):
             return
 
         is_recording = False
-
         mp3_file = current_file.replace(".raw", ".mp3")
         subprocess.run([
             "ffmpeg", "-y", "-i", current_file, "-vn", "-codec:a", "libmp3lame", "-qscale:a", "2", mp3_file
