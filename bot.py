@@ -13,8 +13,8 @@ from pytgcalls import PyTgCalls
 API_ID = int(os.environ.get("API_ID"))
 API_HASH = os.environ.get("API_HASH")
 SESSION_STRING = os.environ.get("SESSION_STRING")
-CHANNEL_ID = int(os.environ.get("CHANNEL_ID"))  # استخدم أرقام القناة
-GROUP_ID = int(os.environ.get("GROUP_ID"))
+CHANNEL_ID = os.environ.get("CHANNEL_ID")  # يمكن أن يكون رقم أو username
+GROUP_ID = os.environ.get("GROUP_ID")
 PORT = int(os.environ.get("PORT", 10000))  # البورت حسب المتغير
 
 # -----------------------------
@@ -56,6 +56,9 @@ async def handle_messages(client, message):
     global is_recording, current_title, current_file
 
     if str(message.chat.id) != str(GROUP_ID):
+        return
+
+    if message.from_user is None:
         return
 
     if not await is_user_admin(message.chat.id, message.from_user.id):
@@ -104,8 +107,6 @@ def run_flask():
     flask_app.run(host="0.0.0.0", port=PORT)
 
 if __name__ == "__main__":
-    # تشغيل Flask في Thread مستقل
     Thread(target=run_flask).start()
-
     print("✅ Userbot جاهز للعمل")
     app.run()
