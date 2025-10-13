@@ -4,45 +4,34 @@ from datetime import datetime
 from pyrogram import Client, filters
 
 # -----------------------------
-# إعداد المتغيرات من البيئة
+# إعدادات البوت
 # -----------------------------
 API_ID = int(os.environ.get("API_ID"))
 API_HASH = os.environ.get("API_HASH")
-SESSION_STRING = os.environ.get("SESSION_STRING")
-CHANNEL_ID = int(os.environ.get("CHANNEL_ID"))  # رقم القناة فقط
-GROUP_ID = int(os.environ.get("GROUP_ID"))      # رقم المجموعة
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
+GROUP_ID = int(os.environ.get("GROUP_ID"))
+CHANNEL_ID = int(os.environ.get("CHANNEL_ID"))
+
+app = Client("bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
 # -----------------------------
-# تهيئة البوت
-# -----------------------------
-app = Client(
-    "userbot",
-    api_id=API_ID,
-    api_hash=API_HASH,
-    session_string=SESSION_STRING
-)
-
-# -----------------------------
-# المتغيرات العالمية
+# متغيرات تسجيل الصوت
 # -----------------------------
 is_recording = False
 current_title = ""
 current_file = ""
 
 # -----------------------------
-# دالة للتحقق من صلاحيات المشرف
+# دوال مساعدة
 # -----------------------------
+def sanitize_filename(name):
+    return "".join(c if c.isalnum() else "_" for c in name)
+
 async def is_user_admin(chat_id, user_id):
     async for member in app.get_chat_members(chat_id, filter="administrators"):
         if member.user.id == user_id:
             return True
     return False
-
-# -----------------------------
-# دالة لتنظيف اسم الملف
-# -----------------------------
-def sanitize_filename(name):
-    return "".join(c for c in name if c.isalnum() or c in "_- ")
 
 # -----------------------------
 # أوامر المجموعة
@@ -81,7 +70,6 @@ async def handle_messages(client, message):
 
         is_recording = False
         mp3_file = current_file.replace(".raw", ".mp3")
-        # تحويل RAW إلى MP3
         subprocess.run([
             "ffmpeg", "-y", "-i", current_file, "-vn", "-codec:a", "libmp3lame", "-qscale:a", "2", mp3_file
         ])
