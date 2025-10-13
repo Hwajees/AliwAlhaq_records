@@ -1,41 +1,58 @@
 import os
-import subprocess
 from datetime import datetime
+import subprocess
 from threading import Thread
+
 from flask import Flask
-from pyrogram import Client, filters
-from pyrogram.sessions import StringSession
+from pyrogram import Client, filters, StringSession
 from pytgcalls import PyTgCalls
 
-# قراءة متغيرات البيئة
+# -----------------------------
+# قراءة متغيرات البيئة من Render
+# -----------------------------
 API_ID = int(os.environ.get("API_ID"))
 API_HASH = os.environ.get("API_HASH")
 SESSION_STRING = os.environ.get("SESSION_STRING")
 CHANNEL_ID = os.environ.get("CHANNEL_ID")
 GROUP_ID = os.environ.get("GROUP_ID")
-PORT = int(os.environ.get("PORT", 10000))  # البورت من متغير البيئة
+PORT = int(os.environ.get("PORT", 10000))  # البورت حسب المتغير
 
-# إنشاء كائن Client باستخدام StringSession
-app = Client(session_name=StringSession(SESSION_STRING), api_id=API_ID, api_hash=API_HASH)
+# -----------------------------
+# إعداد Pyrogram و PyTgCalls
+# -----------------------------
+app = Client(StringSession(SESSION_STRING), api_id=API_ID, api_hash=API_HASH)
 pytgcalls = PyTgCalls(app)
 
-# متغيرات التحكم
+# -----------------------------
+# Flask لمراقبة البوت
+# -----------------------------
+flask_app = Flask(__name__)
+
+@flask_app.route("/")
+def home():
+    return "Userbot is running ✅"
+
+# -----------------------------
+# متغيرات التحكم بالتسجيل
+# -----------------------------
 is_recording = False
 current_title = ""
 current_file = ""
 
-# تنظيف العنوان ليكون اسم ملف صالح
 def sanitize_filename(s: str) -> str:
+    """تنظيف اسم الملف ليكون صالح للنظام."""
     return "".join(c for c in s if c.isalnum() or c in " _-").strip().replace(" ", "_")
 
-# التحقق إذا المستخدم مشرف
 async def is_user_admin(chat_id, user_id):
+    """التحقق إذا كان المستخدم مشرف في المجموعة."""
     admins = await app.get_chat_members(chat_id, filter="administrators")
     return any(a.user.id == user_id for a in admins)
 
-# أمر بدء التسجيل
+# -----------------------------
+# أوامر المجموعة
+# -----------------------------
 @app.on_message(filters.group & filters.text)
-async def start_record(client, message):
+async def handle_messages(client, message):
     global is_recording, current_title, current_file
 
     if str(message.chat.id) != str(GROUP_ID):
@@ -45,63 +62,50 @@ async def start_record(client, message):
         await message.reply("❌ ليس لديك صلاحية استخدام هذا الأمر.")
         return
 
-    if message.text.startswith("سجل المحادثة"):
+    text = message.text.strip()
+
+    # بدء التسجيل
+    if text.startswith("سجل المحادثة"):
         if is_recording:
             await message.reply("⚠️ التسجيل جارٍ بالفعل!")
             return
 
-        parts = message.text.split(" ", 2)
+        parts = text.split(" ", 2)
         title = parts[2].strip() if len(parts) > 2 else f"جلسة_{datetime.now().strftime('%Y-%m-%d_%H-%M')}"
         current_title = title
         current_file = f"{datetime.now().strftime('%Y-%m-%d_%H-%M')}_{sanitize_filename(title)}.raw"
         is_recording = True
         await message.reply(f"✅ بدأ التسجيل: {title}")
 
-# أمر إيقاف التسجيل
-@app.on_message(filters.group & filters.text)
-async def stop_record(client, message):
-    global is_recording, current_title, current_file
-
-    if str(message.chat.id) != str(GROUP_ID):
-        return
-
-    if not await is_user_admin(message.chat.id, message.from_user.id):
-        await message.reply("❌ ليس لديك صلاحية استخدام هذا الأمر.")
-        return
-
-    if message.text.startswith("أوقف التسجيل"):
+    # إيقاف التسجيل
+    elif text.startswith("أوقف التسجيل"):
         if not is_recording:
             await message.reply("⚠️ لا يوجد تسجيل جارٍ الآن!")
             return
 
         is_recording = False
 
-        # تحويل raw إلى mp3
         mp3_file = current_file.replace(".raw", ".mp3")
-        subprocess.run(["ffmpeg", "-y", "-i", current_file, "-vn", "-codec:a", "libmp3lame", "-qscale:a", "2", mp3_file])
+        subprocess.run([
+            "ffmpeg", "-y", "-i", current_file, "-vn", "-codec:a", "libmp3lame", "-qscale:a", "2", mp3_file
+        ])
 
-        # إرسال الملف للقناة
         caption = f"🎙 التسجيل: {current_title}\n📅 التاريخ: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n👥 المجموعة: {GROUP_ID}"
         await app.send_audio(CHANNEL_ID, audio=mp3_file, caption=caption)
 
-        # حذف الملفات المؤقتة
         os.remove(current_file)
         os.remove(mp3_file)
-
         await message.reply(f"✅ تم إيقاف التسجيل وحفظ الملف: {current_title}")
 
-# Flask للبورت والـ keep-alive
-flask_app = Flask(__name__)
-
-@flask_app.route("/")
-def home():
-    return "Userbot is running"
-
+# -----------------------------
+# تشغيل Flask + البوت
+# -----------------------------
 def run_flask():
     flask_app.run(host="0.0.0.0", port=PORT)
 
-# تشغيل Flask في Thread منفصل
-Thread(target=run_flask).start()
+if __name__ == "__main__":
+    # تشغيل Flask في Thread مستقل
+    Thread(target=run_flask).start()
 
-print("✅ اليوزر بوت جاهز للعمل")
-app.run()
+    print("✅ Userbot جاهز للعمل")
+    app.run()
