@@ -1,5 +1,5 @@
 pyrogram==2.0.36
 tgcrypto
-pytgcalls==2.4.3
+pytgcalls==2.1.0
 python-dotenv==1.0.0
 ffmpeg-python
