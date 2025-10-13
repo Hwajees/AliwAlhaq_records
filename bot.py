@@ -13,9 +13,9 @@ from pytgcalls import PyTgCalls
 API_ID = int(os.environ.get("API_ID"))
 API_HASH = os.environ.get("API_HASH")
 SESSION_STRING = os.environ.get("SESSION_STRING")
-CHANNEL_ID = int(os.environ.get("CHANNEL_ID"))  # تأكد أن الرقم وليس اسم المستخدم
+CHANNEL_ID = os.environ.get("CHANNEL_ID")  # يمكن أن يكون int أو username
 GROUP_ID = int(os.environ.get("GROUP_ID"))
-PORT = int(os.environ.get("PORT", 10000))
+PORT = int(os.environ.get("PORT", 10000))  # البورت حسب المتغير
 
 # -----------------------------
 # إعداد Pyrogram و PyTgCalls
@@ -32,9 +32,6 @@ flask_app = Flask(__name__)
 def home():
     return "Userbot is running ✅"
 
-def run_flask():
-    flask_app.run(host="0.0.0.0", port=PORT)
-
 # -----------------------------
 # متغيرات التحكم بالتسجيل
 # -----------------------------
@@ -43,12 +40,15 @@ current_title = ""
 current_file = ""
 
 def sanitize_filename(s: str) -> str:
+    """تنظيف اسم الملف ليكون صالح للنظام."""
     return "".join(c for c in s if c.isalnum() or c in " _-").strip().replace(" ", "_")
 
 async def is_user_admin(chat_id, user_id):
     """التحقق إذا كان المستخدم مشرف في المجموعة."""
-    admins = [a async for a in app.get_chat_members(chat_id, filter="administrators")]
-    return any(a.user.id == user_id for a in admins if a.user is not None)
+    async for member in app.get_chat_members(chat_id, filter="administrators"):
+        if member.user.id == user_id:
+            return True
+    return False
 
 # -----------------------------
 # أوامر المجموعة
@@ -61,7 +61,7 @@ async def handle_messages(client, message):
         return
 
     if message.from_user is None:
-        return  # تجاهل الرسائل بدون مستخدم
+        return  # تجاهل الرسائل بدون مرسل
 
     if not await is_user_admin(message.chat.id, message.from_user.id):
         await message.reply("❌ ليس لديك صلاحية استخدام هذا الأمر.")
@@ -95,11 +95,7 @@ async def handle_messages(client, message):
             "ffmpeg", "-y", "-i", current_file, "-vn", "-codec:a", "libmp3lame", "-qscale:a", "2", mp3_file
         ])
 
-        caption = (
-            f"🎙 التسجيل: {current_title}\n"
-            f"📅 التاريخ: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n"
-            f"👥 المجموعة: {GROUP_ID}"
-        )
+        caption = f"🎙 التسجيل: {current_title}\n📅 التاريخ: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n👥 المجموعة: {GROUP_ID}"
         await app.send_audio(CHANNEL_ID, audio=mp3_file, caption=caption)
 
         os.remove(current_file)
@@ -109,6 +105,9 @@ async def handle_messages(client, message):
 # -----------------------------
 # تشغيل Flask + البوت
 # -----------------------------
+def run_flask():
+    flask_app.run(host="0.0.0.0", port=PORT)
+
 if __name__ == "__main__":
     # تشغيل Flask في Thread مستقل
     Thread(target=run_flask).start()
