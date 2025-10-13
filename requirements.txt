@@ -1,6 +1,4 @@
 pyrogram==2.0.106
-py-tgcalls==2.2.8
-tgcrypto==1.2.5
-python-dotenv==1.1.1
-pyaes==1.6.1
-Flask==2.3.3
+pytgcalls==3.0.0.dev23
+flask==3.0.3
+TgCrypto
