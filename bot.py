@@ -1,10 +1,10 @@
 import os
 from datetime import datetime
 import subprocess
-import asyncio
+from threading import Thread
 
 from flask import Flask
-from pyrogram import Client, filters, idle
+from pyrogram import Client, filters
 from pytgcalls import PyTgCalls
 
 # -----------------------------
@@ -13,9 +13,9 @@ from pytgcalls import PyTgCalls
 API_ID = int(os.environ.get("API_ID"))
 API_HASH = os.environ.get("API_HASH")
 SESSION_STRING = os.environ.get("SESSION_STRING")
-CHANNEL_ID = os.environ.get("CHANNEL_ID")  # يمكن أن يكون @username
+CHANNEL_ID = int(os.environ.get("CHANNEL_ID"))  # استخدم أرقام القناة
 GROUP_ID = int(os.environ.get("GROUP_ID"))
-PORT = int(os.environ.get("PORT", 10000))
+PORT = int(os.environ.get("PORT", 10000))  # البورت حسب المتغير
 
 # -----------------------------
 # إعداد Pyrogram و PyTgCalls
@@ -45,10 +45,8 @@ def sanitize_filename(s: str) -> str:
 
 async def is_user_admin(chat_id, user_id):
     """التحقق إذا كان المستخدم مشرف في المجموعة."""
-    async for member in app.get_chat_members(chat_id, filter="administrators"):
-        if member.user.id == user_id:
-            return True
-    return False
+    admins = [a async for a in app.get_chat_members(chat_id, filter="administrators")]
+    return any(a.user.id == user_id for a in admins)
 
 # -----------------------------
 # أوامر المجموعة
@@ -57,10 +55,10 @@ async def is_user_admin(chat_id, user_id):
 async def handle_messages(client, message):
     global is_recording, current_title, current_file
 
-    if message.chat.id != GROUP_ID:
+    if str(message.chat.id) != str(GROUP_ID):
         return
 
-    if message.from_user is None or not await is_user_admin(message.chat.id, message.from_user.id):
+    if not await is_user_admin(message.chat.id, message.from_user.id):
         await message.reply("❌ ليس لديك صلاحية استخدام هذا الأمر.")
         return
 
@@ -105,15 +103,9 @@ async def handle_messages(client, message):
 def run_flask():
     flask_app.run(host="0.0.0.0", port=PORT)
 
-async def main():
-    # تشغيل Flask في Thread مستقل
-    import threading
-    threading.Thread(target=run_flask).start()
-
-    await app.start()
-    await pytgcalls.start()
-    print("✅ Userbot جاهز للعمل")
-    await idle()  # يبقي البوت شغّال
-
 if __name__ == "__main__":
-    asyncio.run(main())
+    # تشغيل Flask في Thread مستقل
+    Thread(target=run_flask).start()
+
+    print("✅ Userbot جاهز للعمل")
+    app.run()
