@@ -2,6 +2,10 @@ import os
 from datetime import datetime
 from pyrogram import Client, filters
 import subprocess
+import os
+from flask import Flask
+
+app_flask = Flask(__name__)
 
 # ===========================
 # قراءة متغيرات البيئة
@@ -99,5 +103,14 @@ async def stop_record(client, message):
 # ===========================
 # تشغيل اليوزر بوت
 # ===========================
-print("✅ اليوزر بوت جاهز للعمل")
-app.run()
+
+@app_flask.route("/")
+def home():
+    return "Userbot is running"
+
+if __name__ == "__main__":
+    from threading import Thread
+    Thread(target=lambda: app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))).start()
+    # تشغيل اليوزربوت
+    app.run()  # هذا من Pyrogram
+
