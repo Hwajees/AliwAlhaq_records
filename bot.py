@@ -1,5 +1,4 @@
 import os
-import subprocess
 from datetime import datetime
 from pyrogram import Client, filters
 
@@ -7,7 +6,7 @@ from pyrogram import Client, filters
 # إعدادات البوت
 # -----------------------------
 API_ID = int(os.environ.get("API_ID"))
-API_HASH = os.environ.get("API_HASH"))
+API_HASH = os.environ.get("API_HASH")
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 GROUP_ID = int(os.environ.get("GROUP_ID"))
 CHANNEL_ID = int(os.environ.get("CHANNEL_ID"))
@@ -58,7 +57,7 @@ async def handle_messages(client, message):
         parts = text.split(" ", 2)
         title = parts[2].strip() if len(parts) > 2 else f"جلسة_{datetime.now().strftime('%Y-%m-%d_%H-%M')}"
         current_title = title
-        current_file = f"{datetime.now().strftime('%Y-%m-%d_%H-%M')}_{sanitize_filename(title)}.raw"
+        current_file = f"{datetime.now().strftime('%Y-%m-%d_%H-%M')}_{sanitize_filename(title)}.ogg"
         is_recording = True
         await message.reply(f"✅ بدأ التسجيل: {title}")
 
@@ -69,17 +68,31 @@ async def handle_messages(client, message):
             return
 
         is_recording = False
-        mp3_file = current_file.replace(".raw", ".mp3")
-        subprocess.run([
-            "ffmpeg", "-y", "-i", current_file, "-vn", "-codec:a", "libmp3lame", "-qscale:a", "2", mp3_file
-        ])
 
-        caption = f"🎙 التسجيل: {current_title}\n📅 التاريخ: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n👥 المجموعة: {GROUP_ID}"
-        await app.send_audio(CHANNEL_ID, audio=mp3_file, caption=caption)
+        # رفع الملف كما هو إلى القناة بدون تحويل
+        caption = (
+            f"🎙 التسجيل: {current_title}\n"
+            f"📅 التاريخ: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n"
+            f"👥 المجموعة: {GROUP_ID}"
+        )
+        await app.send_document(CHANNEL_ID, document=current_file, caption=caption)
 
         os.remove(current_file)
-        os.remove(mp3_file)
-        await message.reply(f"✅ تم إيقاف التسجيل وحفظ الملف: {current_title}")
+        await message.reply(f"✅ تم إيقاف التسجيل ورفع الملف: {current_title}")
+
+# -----------------------------
+# تسجيل الرسائل الصوتية أثناء التشغيل
+# -----------------------------
+@app.on_message(filters.group & filters.voice)
+async def record_voice_messages(client, message):
+    global is_recording, current_file
+
+    if str(message.chat.id) != str(GROUP_ID):
+        return
+
+    if is_recording:
+        # حفظ الرسالة الصوتية كما هي
+        await message.download(current_file)
 
 # -----------------------------
 # تشغيل البوت
