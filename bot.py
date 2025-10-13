@@ -5,7 +5,6 @@ from threading import Thread
 
 from flask import Flask
 from pyrogram import Client, filters
-from pyrogram.session import StringSession
 from pytgcalls import PyTgCalls
 
 # -----------------------------
@@ -21,7 +20,7 @@ PORT = int(os.environ.get("PORT", 10000))  # البورت حسب المتغير
 # -----------------------------
 # إعداد Pyrogram و PyTgCalls
 # -----------------------------
-app = Client(StringSession(SESSION_STRING), api_id=API_ID, api_hash=API_HASH)
+app = Client(SESSION_STRING, api_id=API_ID, api_hash=API_HASH)
 pytgcalls = PyTgCalls(app)
 
 # -----------------------------
