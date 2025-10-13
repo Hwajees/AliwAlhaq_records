@@ -1,50 +1,48 @@
 import os
-from datetime import datetime
 import subprocess
-from threading import Thread
-
-from flask import Flask
+from datetime import datetime
 from pyrogram import Client, filters
-from pytgcalls import PyTgCalls
 
 # -----------------------------
-# قراءة متغيرات البيئة من Render
+# إعداد المتغيرات من البيئة
 # -----------------------------
 API_ID = int(os.environ.get("API_ID"))
 API_HASH = os.environ.get("API_HASH")
 SESSION_STRING = os.environ.get("SESSION_STRING")
-CHANNEL_ID = int(os.environ.get("CHANNEL_ID"))  # تأكد أنه رقم وليس @username
-GROUP_ID = int(os.environ.get("GROUP_ID"))
-PORT = int(os.environ.get("PORT", 10000))
+CHANNEL_ID = int(os.environ.get("CHANNEL_ID"))  # رقم القناة فقط
+GROUP_ID = int(os.environ.get("GROUP_ID"))      # رقم المجموعة
 
 # -----------------------------
-# إعداد Pyrogram و PyTgCalls
+# تهيئة البوت
 # -----------------------------
-app = Client(SESSION_STRING, api_id=API_ID, api_hash=API_HASH)
-pytgcalls = PyTgCall(app)
+app = Client(
+    "userbot",
+    api_id=API_ID,
+    api_hash=API_HASH,
+    session_string=SESSION_STRING
+)
 
 # -----------------------------
-# Flask لمراقبة البوت
-# -----------------------------
-flask_app = Flask(__name__)
-
-@flask_app.route("/")
-def home():
-    return "Userbot is running ✅"
-
-# -----------------------------
-# متغيرات التحكم بالتسجيل
+# المتغيرات العالمية
 # -----------------------------
 is_recording = False
 current_title = ""
 current_file = ""
 
-def sanitize_filename(s: str) -> str:
-    return "".join(c for c in s if c.isalnum() or c in " _-").strip().replace(" ", "_")
-
+# -----------------------------
+# دالة للتحقق من صلاحيات المشرف
+# -----------------------------
 async def is_user_admin(chat_id, user_id):
-    admins = [a async for a in app.get_chat_members(chat_id, filter="administrators")]
-    return any(a.user.id == user_id for a in admins)
+    async for member in app.get_chat_members(chat_id, filter="administrators"):
+        if member.user.id == user_id:
+            return True
+    return False
+
+# -----------------------------
+# دالة لتنظيف اسم الملف
+# -----------------------------
+def sanitize_filename(name):
+    return "".join(c for c in name if c.isalnum() or c in "_- ")
 
 # -----------------------------
 # أوامر المجموعة
@@ -83,6 +81,7 @@ async def handle_messages(client, message):
 
         is_recording = False
         mp3_file = current_file.replace(".raw", ".mp3")
+        # تحويل RAW إلى MP3
         subprocess.run([
             "ffmpeg", "-y", "-i", current_file, "-vn", "-codec:a", "libmp3lame", "-qscale:a", "2", mp3_file
         ])
@@ -95,12 +94,7 @@ async def handle_messages(client, message):
         await message.reply(f"✅ تم إيقاف التسجيل وحفظ الملف: {current_title}")
 
 # -----------------------------
-# تشغيل Flask + البوت
+# تشغيل البوت
 # -----------------------------
-def run_flask():
-    flask_app.run(host="0.0.0.0", port=PORT)
-
 if __name__ == "__main__":
-    Thread(target=run_flask).start()
-    print("✅ Userbot جاهز للعمل")
     app.run()
