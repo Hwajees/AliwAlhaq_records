@@ -4,7 +4,8 @@ import subprocess
 from threading import Thread
 
 from flask import Flask
-from pyrogram import Client, filters, StringSession
+from pyrogram import Client, filters
+from pyrogram.session import StringSession
 from pytgcalls import PyTgCalls
 
 # -----------------------------
