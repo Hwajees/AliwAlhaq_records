@@ -5,6 +5,7 @@ from pyrogram import Client, filters
 from pyrogram.types import Message
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from pyrogram.enums import ChatMembersFilter
 
 # ==========================
 # المتغيرات
@@ -45,8 +46,8 @@ recording_name = ""
 # ==========================
 # تحقق من المشرف
 # ==========================
-async def is_user_admin(chat_id, user_id):
-    async for member in app.get_chat_members(chat_id, filter="administrators"):
+sync def is_user_admin(chat_id, user_id):
+    async for member in app.get_chat_members(chat_id, filter=ChatMembersFilter.ADMINISTRATORS):
         if member.user.id == user_id:
             return True
     return False
@@ -99,3 +100,4 @@ async def handle_messages(client: Client, message: Message):
 # تشغيل اليوزربوت
 # ==========================
 app.run()
+
