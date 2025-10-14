@@ -2,110 +2,100 @@ import os
 import asyncio
 from datetime import datetime
 from pyrogram import Client, filters
+from pyrogram.types import Message
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
 
-# === متغيرات البيئة من Render ===
-API_ID = int(os.getenv("API_ID"))
-API_HASH = os.getenv("API_HASH")
-SESSION_STRING = os.getenv("SESSION_STRING")
-CHANNEL_ID = os.getenv("CHANNEL_ID") or ""
-GROUP_ID = int(os.getenv("GROUP_ID"))
+# ==========================
+# المتغيرات
+# ==========================
+API_ID = int(os.environ.get("API_ID"))
+API_HASH = os.environ.get("API_HASH")
+SESSION_STRING = os.environ.get("SESSION_STRING")  # سلسلة الجلسة لليوزربوت
 
-# تنظيف الـ @ من القناة إذا كانت موجودة
-if CHANNEL_ID.startswith("@"):
-    CHANNEL_ID = CHANNEL_ID[1:]
+GROUP_ID = int(os.environ.get("GROUP_ID"))  # معرف المجموعة
+CHANNEL_ID = os.environ.get("CHANNEL_ID")   # اسم القناة بدون @ مثال: AliwAlhaq_records
 
-# إنشاء تطبيق Pyrogram
+# ==========================
+# إعداد اليوزربوت
+# ==========================
 app = Client("userbot", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING)
 
-# === متغيرات التحكم في التسجيل ===
+# ==========================
+# خادم وهمي لإرضاء Render
+# ==========================
+class SimpleHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"Userbot is running!")
+
+def run_server():
+    server = HTTPServer(("0.0.0.0", 10000), SimpleHandler)
+    server.serve_forever()
+
+threading.Thread(target=run_server, daemon=True).start()
+
+# ==========================
+# متغيرات تسجيل
+# ==========================
 is_recording = False
-record_title = ""
-record_start_time = None
+recording_name = ""
 
-# ==== التحقق من كون المستخدم مشرفًا في المجموعة ====
+# ==========================
+# تحقق من المشرف
+# ==========================
 async def is_user_admin(chat_id, user_id):
-    try:
-        member = await app.get_chat_member(chat_id, user_id)
-        return member.status in ("administrator", "creator")
-    except Exception:
-        return False
+    async for member in app.get_chat_members(chat_id, filter="administrators"):
+        if member.user.id == user_id:
+            return True
+    return False
 
-# ==== استقبال الرسائل في المجموعة ====
-@app.on_message(filters.chat(GROUP_ID))
-async def handle_messages(client, message):
-    global is_recording, record_title, record_start_time
+# ==========================
+# معالجة الرسائل
+# ==========================
+@app.on_message(filters.group & filters.text)
+async def handle_messages(client: Client, message: Message):
+    global is_recording, recording_name
 
-    # تجاهل رسائل الأعضاء العاديين
-    if not await is_user_admin(message.chat.id, message.from_user.id):
+    user_id = message.from_user.id
+    text = message.text.strip()
+
+    # تحقق من المشرف
+    if not await is_user_admin(message.chat.id, user_id):
+        # تجاهل الأعضاء العاديين تماما
         return
 
-    text = message.text or ""
+    # أوامر التسجيل
+    if text.startswith("سجل المحادثة"):
+        recording_name = text.replace("سجل المحادثة", "").strip()
+        if recording_name == "":
+            recording_name = "تسجيل_بدون_اسم"
+        is_recording = True
+        await message.reply_text(f"✅ بدأ التسجيل: {recording_name}")
+        return
 
-    # === بدء التسجيل ===
-    if text.lower().startswith("سجل المحادثة"):
-        try:
-            record_title = text.split(" ", 2)[-1].strip()
-            if not record_title:
-                await message.reply("❌ الرجاء كتابة اسم بعد الأمر.")
-                return
-            is_recording = True
-            record_start_time = datetime.now()
-            await message.reply(f"✅ بدأ التسجيل: {record_title}")
-        except Exception as e:
-            await message.reply(f"❌ خطأ أثناء البدء: {e}")
-
-    # === إيقاف التسجيل ===
-    elif text.lower().startswith("أوقف التسجيل"):
+    if text == "أوقف التسجيل":
         if not is_recording:
-            await message.reply("❌ لا يوجد تسجيل قيد التشغيل.")
+            await message.reply_text("❌ لم يتم بدء التسجيل مسبقاً.")
             return
-
         is_recording = False
-        record_end_time = datetime.now()
 
-        filename = f"{record_start_time.strftime('%Y-%m-%d_%H-%M')}_{record_title}.ogg"
-        filepath = f"./{filename}"
+        # بناء اسم الملف
+        date_str = datetime.now().strftime("%Y-%m-%d_%H-%M")
+        file_name = f"{date_str}_{recording_name}.ogg"
 
-        # إنشاء ملف تجريبي صغير (كتم صوت فقط)
-        with open(filepath, "wb") as f:
-            f.write(b"\x00" * 1000)
-
+        # إرسال ملف اختباري للقناة
+        test_file = "test_audio.ogg"  # يجب وضع الملف في نفس مجلد المشروع
         try:
-            await app.send_document(
-                chat_id=CHANNEL_ID,
-                document=filepath,
-                caption=(
-                    f"🎙 التسجيل: {record_title}\n"
-                    f"📅 التاريخ: {record_start_time.strftime('%Y-%m-%d %H:%M')}\n"
-                    f"👥 المجموعة: {message.chat.id}"
-                ),
-            )
-            await message.reply(f"✅ تم إرسال التسجيل للقناة: {record_title}")
+            await app.send_audio(CHANNEL_ID, test_file,
+                                 caption=f"🎙 التسجيل: {recording_name}\n📅 التاريخ: {date_str}\n👥 المجموعة: {message.chat.id}")
+            await message.reply_text(f"✅ تم إرسال التسجيل للقناة: {recording_name}")
         except Exception as e:
-            await message.reply(f"❌ حدث خطأ أثناء إرسال الملف: {e}")
+            await message.reply_text(f"❌ حدث خطأ أثناء إرسال الملف: {e}")
+        return
 
-        # حذف الملف بعد الإرسال
-        if os.path.exists(filepath):
-            os.remove(filepath)
-
-    # === أمر اختبار الملف ===
-    elif text.lower().startswith("/testfile"):
-        try:
-            test_path = "./testfile.ogg"
-            # إنشاء ملف اختباري إذا لم يكن موجودًا
-            if not os.path.exists(test_path):
-                with open(test_path, "wb") as f:
-                    f.write(b"\x00" * 1000)
-
-            await app.send_document(
-                chat_id=CHANNEL_ID,
-                document=test_path,
-                caption="🔹 اختبار الإرسال من اليوزربوت"
-            )
-            await message.reply("✅ تم إرسال الملف التجريبي للقناة.")
-        except Exception as e:
-            await message.reply(f"❌ حدث خطأ أثناء إرسال الملف: {e}")
-
-# === تشغيل التطبيق ===
-print("✅ Userbot is running...")
+# ==========================
+# تشغيل اليوزربوت
+# ==========================
 app.run()
