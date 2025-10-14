@@ -1,6 +1,8 @@
 import os
+import asyncio
 from datetime import datetime
 from pyrogram import Client, filters
+from pyrogram.errors import PeerIdInvalid
 
 # -----------------------------
 # إعدادات البوت
@@ -9,9 +11,14 @@ API_ID = int(os.environ.get("API_ID"))
 API_HASH = os.environ.get("API_HASH")
 SESSION_STRING = os.environ.get("SESSION_STRING")
 GROUP_ID = int(os.environ.get("GROUP_ID"))
-CHANNEL_ID = "@AliwAlhaq_records"  # استخدم username القناة
+CHANNEL_ID = os.environ.get("CHANNEL_ID")  # @اسم_القناة
 
-app = Client("userbot", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING)
+app = Client(
+    "userbot",
+    api_id=API_ID,
+    api_hash=API_HASH,
+    session_string=SESSION_STRING,
+)
 
 # -----------------------------
 # متغيرات تسجيل الصوت
@@ -42,10 +49,11 @@ async def handle_messages(client, message):
     if str(message.chat.id) != str(GROUP_ID):
         return
 
+    user_id = message.from_user.id
     text = message.text.strip()
 
-    # التحقق من المشرف
-    if not await is_user_admin(message.chat.id, message.from_user.id):
+    # تحقق من صلاحية المستخدم
+    if not await is_user_admin(message.chat.id, user_id):
         await message.reply("❌ ليس لديك صلاحية استخدام هذا الأمر.")
         return
 
@@ -58,7 +66,7 @@ async def handle_messages(client, message):
         parts = text.split(" ", 2)
         title = parts[2].strip() if len(parts) > 2 else f"جلسة_{datetime.now().strftime('%Y-%m-%d_%H-%M')}"
         current_title = title
-        current_file = f"test_audio.ogg"  # للتجربة استخدم الملف التجريبي
+        current_file = f"{datetime.now().strftime('%Y-%m-%d_%H-%M')}_{sanitize_filename(title)}.ogg"
         is_recording = True
         await message.reply(f"✅ بدأ التسجيل: {title}")
 
@@ -69,17 +77,36 @@ async def handle_messages(client, message):
             return
 
         is_recording = False
-
+        caption = f"🎙 التسجيل: {current_title}\n📅 التاريخ: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n👥 المجموعة: {GROUP_ID}"
         try:
-            caption = f"🎙 التسجيل: {current_title}\n📅 التاريخ: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n👥 المجموعة: {GROUP_ID}"
             await app.send_audio(CHANNEL_ID, audio=current_file, caption=caption)
-            await message.reply(f"✅ تم إيقاف التسجيل وإرسال الملف للقناة: {current_title}")
+            await message.reply(f"✅ تم إيقاف التسجيل وإرساله للقناة: {current_title}")
+        except PeerIdInvalid:
+            await message.reply("❌ حدث خطأ أثناء إرسال الملف: تحقق من اسم القناة أو صلاحيات البوت.")
         except Exception as e:
-            await message.reply(f"❌ حدث خطأ أثناء إرسال الملف: {e}")
+            await message.reply(f"❌ حدث خطأ: {e}")
+
+# -----------------------------
+# أمر اختبار إرسال ملف ثابت
+# -----------------------------
+@app.on_message(filters.group & filters.command("testfile"))
+async def send_test_file(client, message):
+    if not await is_user_admin(message.chat.id, message.from_user.id):
+        await message.reply("❌ ليس لديك صلاحية استخدام هذا الأمر.")
+        return
+
+    test_file = "test_audio.ogg"
+    try:
+        await app.send_audio(CHANNEL_ID, audio=test_file, caption="🔹 اختبار الإرسال من اليوزبوت")
+        await message.reply("✅ تم إرسال الملف التجريبي للقناة.")
+    except PeerIdInvalid:
+        await message.reply("❌ حدث خطأ: تحقق من اسم القناة أو صلاحيات البوت.")
+    except Exception as e:
+        await message.reply(f"❌ حدث خطأ: {e}")
 
 # -----------------------------
 # تشغيل البوت
 # -----------------------------
 if __name__ == "__main__":
-    print("✅ Starting userbot...")
+    print("✅ Starting userbot + web server...")
     app.run()
