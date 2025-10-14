@@ -1,54 +1,63 @@
-import sys
 import os
-
-# أضف مجلد libs إلى sys.path لكي يتعرف بايثون على الحزم المحلية
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "libs"))
-
-# الآن يمكن الاستيراد
-from tgcalls import SomeModule  # حسب الحاجة
 from pyrogram import Client, filters
 from pytgcalls import PyTgCalls
-from pytgcalls.types import AudioPiped
+from pytgcalls.types import Update
+from pytgcalls.types.input_stream import InputStream, InputAudioStream
+from pyrogram.types import Message
 
-# 🔹 ضع بياناتك هنا
-API_ID = int("ضع_هنا_API_ID")
-API_HASH = "ضع_هنا_API_HASH"
-SESSION_STRING = "ضع_هنا_STRING_SESSION"
+# ---------------------------
+# إعدادات البوت
+# ---------------------------
+API_ID = int(os.environ.get("API_ID", 123456))  # ضع API_ID الخاص بك
+API_HASH = os.environ.get("API_HASH", "your_api_hash")
+SESSION_STRING = os.environ.get("SESSION_STRING", "your_session_string")
+GROUP_ID = int(os.environ.get("GROUP_ID", -1001234567890))  # معرف القروب
 
-# 🔹 إنشاء عميل Pyrogram
-app = Client(
-    ":memory:",
-    api_id=API_ID,
-    api_hash=API_HASH,
-    session_string=SESSION_STRING
-)
+# ملف الصوت الافتراضي عند الصعود للصوت
+AUDIO_FILE = "silence.mp3"
 
-# 🔹 إنشاء عميل المكالمات الصوتية
-call = PyTgCalls(app)
+# ---------------------------
+# إنشاء العميل
+# ---------------------------
+app = Client("userbot", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING)
+pytgcalls = PyTgCalls(app)
 
-# 🔹 أمر الصعود للمحادثة الصوتية
-@app.on_message(filters.command("صعد", prefixes=["", "/"]))
-async def join_vc(client, message):
-    chat_id = message.chat.id
+# ---------------------------
+# الأحداث
+# ---------------------------
+@app.on_message(filters.command("joinvc") & filters.user("me") & filters.chat(GROUP_ID))
+async def join_vc(client: Client, message: Message):
+    """
+    صعود البوت للمكالمة الصوتية
+    """
     try:
-        await call.join_group_call(chat_id, AudioPiped("silence.mp3"))
-        await message.reply("✅ صعدت إلى المحادثة الصوتية.")
+        await pytgcalls.join_group_call(
+            GROUP_ID,
+            InputStream(
+                InputAudioStream(AUDIO_FILE)
+            )
+        )
+        await message.reply_text("✅ صعدت إلى المكالمة الصوتية!")
     except Exception as e:
-        await message.reply(f"❌ حدث خطأ أثناء الصعود: {e}")
+        await message.reply_text(f"❌ حدث خطأ: {e}")
 
-# 🔹 أمر النزول من المحادثة الصوتية
-@app.on_message(filters.command("انزل", prefixes=["", "/"]))
-async def leave_vc(client, message):
-    chat_id = message.chat.id
+@app.on_message(filters.command("leavevc") & filters.user("me") & filters.chat(GROUP_ID))
+async def leave_vc(client: Client, message: Message):
+    """
+    الخروج من المكالمة الصوتية
+    """
     try:
-        await call.leave_group_call(chat_id)
-        await message.reply("⬇️ نزلت من المحادثة الصوتية.")
+        await pytgcalls.leave_group_call(GROUP_ID)
+        await message.reply_text("✅ خرجت من المكالمة الصوتية!")
     except Exception as e:
-        await message.reply(f"❌ حدث خطأ أثناء النزول: {e}")
+        await message.reply_text(f"❌ حدث خطأ: {e}")
 
-# 🔹 تشغيل البوت
+# ---------------------------
+# تشغيل البوت
+# ---------------------------
 if __name__ == "__main__":
-    call.start()
-    print("🚀 البوت يعمل الآن وينتظر الأوامر...")
-    app.run()
-
+    print("🚀 Starting userbot...")
+    app.start()
+    pytgcalls.start()
+    print("✅ Userbot is running")
+    app.idle()
