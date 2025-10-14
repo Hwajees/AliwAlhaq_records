@@ -5,7 +5,7 @@ from pyrogram import Client, filters
 from pyrogram.types import Message
 
 # أضف مجلد libs إلى مسار Python ليتم التعرف على الحزم المحلية
-sys.path.append(os.path.join(os.path.dirname(__file__), "libs"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "libs"))
 
 # استيراد الحزم بعد إضافة المسار
 from pytgcalls import PyTgCalls
@@ -53,3 +53,4 @@ async def leave_voice(_, message: Message):
 # تشغيل البوت
 print("🚀 Starting userbot...")
 app.run()
+
