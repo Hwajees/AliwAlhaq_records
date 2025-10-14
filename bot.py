@@ -1,7 +1,7 @@
 import os
-import asyncio
 from datetime import datetime
 from pyrogram import Client, filters
+from pyrogram.enums import ChatMembersFilter
 from pyrogram.errors import PeerIdInvalid
 
 # -----------------------------
@@ -11,7 +11,7 @@ API_ID = int(os.environ.get("API_ID"))
 API_HASH = os.environ.get("API_HASH")
 SESSION_STRING = os.environ.get("SESSION_STRING")
 GROUP_ID = int(os.environ.get("GROUP_ID"))
-CHANNEL_ID = os.environ.get("CHANNEL_ID")  # @اسم_القناة
+CHANNEL_ID = os.environ.get("CHANNEL_ID")  # مثال: @AliwAlhaq_records
 
 app = Client(
     "userbot",
@@ -34,7 +34,7 @@ def sanitize_filename(name):
     return "".join(c if c.isalnum() else "_" for c in name)
 
 async def is_user_admin(chat_id, user_id):
-    async for member in app.get_chat_members(chat_id, filter="administrators"):
+    async for member in app.get_chat_members(chat_id, filter=ChatMembersFilter.ADMINISTRATORS):
         if member.user.id == user_id:
             return True
     return False
@@ -86,23 +86,16 @@ async def handle_messages(client, message):
         except Exception as e:
             await message.reply(f"❌ حدث خطأ: {e}")
 
-# -----------------------------
-# أمر اختبار إرسال ملف ثابت
-# -----------------------------
-@app.on_message(filters.group & filters.command("testfile"))
-async def send_test_file(client, message):
-    if not await is_user_admin(message.chat.id, message.from_user.id):
-        await message.reply("❌ ليس لديك صلاحية استخدام هذا الأمر.")
-        return
-
-    test_file = "test_audio.ogg"
-    try:
-        await app.send_audio(CHANNEL_ID, audio=test_file, caption="🔹 اختبار الإرسال من اليوزبوت")
-        await message.reply("✅ تم إرسال الملف التجريبي للقناة.")
-    except PeerIdInvalid:
-        await message.reply("❌ حدث خطأ: تحقق من اسم القناة أو صلاحيات البوت.")
-    except Exception as e:
-        await message.reply(f"❌ حدث خطأ: {e}")
+    # إرسال ملف اختبار
+    elif text.startswith("/testfile"):
+        test_file = "test_audio.ogg"
+        try:
+            await app.send_audio(CHANNEL_ID, audio=test_file, caption="🔹 اختبار الإرسال من اليوزبوت")
+            await message.reply("✅ تم إرسال الملف التجريبي للقناة.")
+        except PeerIdInvalid:
+            await message.reply("❌ حدث خطأ: تحقق من اسم القناة أو صلاحيات البوت.")
+        except Exception as e:
+            await message.reply(f"❌ حدث خطأ: {e}")
 
 # -----------------------------
 # تشغيل البوت
