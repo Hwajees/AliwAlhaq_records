@@ -1,8 +1,10 @@
 import os
 import subprocess
 from datetime import datetime
+from threading import Thread
 from pyrogram import Client, filters
 from pyrogram.enums import ChatMembersFilter
+from flask import Flask
 
 # -----------------------------
 # إعدادات البوت
@@ -54,11 +56,10 @@ async def handle_messages(client, message):
     # تحقق من صلاحية المشرف
     is_admin = await is_user_admin(message.chat.id, user_id)
 
-    # تجاهل أي رسالة من عضو عادي تمامًا
     if not is_admin:
-        return  # لا رد، لا تفاعل
+        # لا نرد على الأعضاء العاديين
+        return
 
-    # --- أوامر المشرف ---
     if text.startswith("سجل المحادثة"):
         if is_recording:
             await message.reply("⚠️ التسجيل جارٍ بالفعل!")
@@ -78,6 +79,7 @@ async def handle_messages(client, message):
 
         is_recording = False
 
+        # إرسال الملف التجريبي بدل التسجيل الحقيقي
         test_file = "test_audio.ogg"  # يجب رفعه في مجلد المشروع
         if not os.path.exists(test_file):
             await message.reply("❌ حدث خطأ: الملف التجريبي غير موجود.")
@@ -91,8 +93,23 @@ async def handle_messages(client, message):
             await message.reply(f"❌ حدث خطأ أثناء إرسال الملف: {e}")
 
 # -----------------------------
-# تشغيل البوت
+# Flask Web Server صغير
+# -----------------------------
+flask_app = Flask("")
+
+@flask_app.route("/")
+def home():
+    return "Userbot is running."
+
+def run_flask():
+    flask_app.run(host="0.0.0.0", port=8080)
+
+# -----------------------------
+# تشغيل البوت والسيرفر
 # -----------------------------
 if __name__ == "__main__":
     print("🚀 Starting userbot...")
+    # شغل Flask server في Thread منفصل
+    Thread(target=run_flask).start()
+    # شغل Pyrogram
     app.run()
