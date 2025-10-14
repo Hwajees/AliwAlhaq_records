@@ -1,189 +1,111 @@
 import os
+import asyncio
 from datetime import datetime
 from pyrogram import Client, filters
 
-# -----------------------------
-# إعدادات من المتغيرات البيئية (Render)
-# -----------------------------
-# تأكد أنك أضفت هذه المتغيرات في إعدادات الخدمة على Render
-API_ID = int(os.environ.get("API_ID"))
-API_HASH = os.environ.get("API_HASH")
-SESSION_STRING = os.environ.get("SESSION_STRING")
+# === متغيرات البيئة من Render ===
+API_ID = int(os.getenv("API_ID"))
+API_HASH = os.getenv("API_HASH")
+SESSION_STRING = os.getenv("SESSION_STRING")
+CHANNEL_ID = os.getenv("CHANNEL_ID") or ""
+GROUP_ID = int(os.getenv("GROUP_ID"))
 
-# يمكن أن يكون CHANNEL_ID رقماً (مثل -100123...) أو اسم المستخدم للقناة "@MyChannel"
-CHANNEL_ID_RAW = os.environ.get("CHANNEL_ID")
+# تنظيف الـ @ من القناة إذا كانت موجودة
+if CHANNEL_ID.startswith("@"):
+    CHANNEL_ID = CHANNEL_ID[1:]
 
-# يمكن أن يكون GROUP_ID رقماً (مثل -100123...) أو اسم المستخدم للمجموعة "@mygroup"
-GROUP_ID_RAW = os.environ.get("GROUP_ID")
+# إنشاء تطبيق Pyrogram
+app = Client("userbot", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING)
 
-# تحويل القيم الرقمية إلى int (إن أمكن) وإلا نتركها كسلاسل (username)
-def parse_peer(raw):
-    if raw is None:
-        return None
-    raw = raw.strip()
-    # لو يبدأ بـ @ نتركه كسلسلة
-    if raw.startswith("@"):
-        return raw
-    # محاولة تحويل إلى int
-    try:
-        return int(raw)
-    except Exception:
-        return raw
-
-CHANNEL_ID = parse_peer(CHANNEL_ID_RAW)
-GROUP_ID = parse_peer(GROUP_ID_RAW)
-
-# -----------------------------
-# إنشاء اليوزربوت (Client)
-# -----------------------------
-# نستخدم session name "userbot" مع session_string (تحويل حساب حقيقي لـ userbot)
-app = Client(
-    "userbot",
-    api_id=API_ID,
-    api_hash=API_HASH,
-    session_string=SESSION_STRING
-)
-
-# -----------------------------
-# متغيرات حالة التسجيل
-# -----------------------------
+# === متغيرات التحكم في التسجيل ===
 is_recording = False
-current_title = None
-current_file = None  # مسار الملف المحلي (.ogg) الذي سنرفع منه
+record_title = ""
+record_start_time = None
 
-# اسم ملف الاختبار الموجود داخل المشروع (رفعته انت: test_audio.ogg)
-TEST_FILE = "test_audio.ogg"
-
-# -----------------------------
-# دوال مساعدة
-# -----------------------------
+# ==== التحقق من كون المستخدم مشرفًا في المجموعة ====
 async def is_user_admin(chat_id, user_id):
-    """
-    تحقق إن كان user_id مشرف أو منشئ في chat_id.
-    نستخدم get_chat_member للحصول على الحالة مباشرة (لا نستخدم filters خاطئة).
-    """
     try:
         member = await app.get_chat_member(chat_id, user_id)
         return member.status in ("administrator", "creator")
     except Exception:
-        # أي خطأ نعتبره ليس مشرفاً
         return False
 
-def make_caption(title, group_id):
-    return (
-        f"🎙 التسجيل: {title}\n"
-        f"📅 التاريخ: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n"
-        f"👥 المجموعة: {group_id}"
-    )
-
-# -----------------------------
-# التعامل مع أوامر داخل المجموعة المحددة فقط
-# -----------------------------
-# نستخدم filters.chat(GROUP_ID) — يعمل سواء كان Group ID رقماً أو username
-@app.on_message(filters.chat(GROUP_ID) & filters.text)
+# ==== استقبال الرسائل في المجموعة ====
+@app.on_message(filters.chat(GROUP_ID))
 async def handle_messages(client, message):
-    global is_recording, current_title, current_file
+    global is_recording, record_title, record_start_time
 
-    # تأكد أن الرسالة من مستخدم فعلي (ليس قناة/بوت)
-    if not message.from_user:
+    # تجاهل رسائل الأعضاء العاديين
+    if not await is_user_admin(message.chat.id, message.from_user.id):
         return
 
-    user_id = message.from_user.id
-    text = (message.text or "").strip()
+    text = message.text or ""
 
-    # فقط المشرفين يسمح لهم بالأوامر — الأعضاء العاديون *لا* يُرد عليهم إطلاقًا
-    if not await is_user_admin(message.chat.id, user_id):
-        return  # تجاهل تام للأعضاء العاديين
-
-    # --- أمر: بدء التسجيل ---
-    # الشكل: "سجل المحادثة" أو "سجل المحادثة <العنوان>"
-    if text.startswith("سجل المحادثة"):
-        # إذا كان تسجيل جارٍ لا نبدأ آخر
-        if is_recording:
-            await message.reply_text("⚠️ التسجيل جارٍ بالفعل!")
-            return
-
-        # استخراج العنوان (إن وُجب)
-        parts = text.split(" ", 2)
-        title = parts[2].strip() if len(parts) > 2 else f"جلسة_{datetime.now().strftime('%Y-%m-%d_%H-%M')}"
-        # نعين الملف الحالي إلى ملف الاختبار (في المستقبل ستحل محله ملف التسجيل الحقيقي)
-        current_title = title
-        current_file = os.path.join(os.getcwd(), TEST_FILE)
-        is_recording = True
-
-        await message.reply_text(f"✅ بدأ التسجيل: {title}")
-        return
-
-    # --- أمر: إيقاف التسجيل ---
-    # الشكل: "أوقف التسجيل"
-    if text == "أوقف التسجيل":
-        if not is_recording:
-            await message.reply_text("⚠️ لا يوجد تسجيل جارٍ الآن!")
-            return
-
-        # نتحقق أن الملف موجود وحجمه > 0
-        if not current_file or not os.path.exists(current_file):
-            await message.reply_text("❌ حدث خطأ: ملف التسجيل غير موجود على الخادم.")
-            # نعيد حالة التسجيل إلى False حتى لا نعلق
-            is_recording = False
-            current_title = None
-            current_file = None
-            return
-
-        size = os.path.getsize(current_file)
-        if size == 0:
-            await message.reply_text("❌ حدث خطأ: حجم الملف يساوي 0 بايت.")
-            is_recording = False
-            current_title = None
-            current_file = None
-            return
-
-        # نحاول إرسال الملف إلى القناة — يمكن CHANNEL_ID أن يكون رقمياً أو username
+    # === بدء التسجيل ===
+    if text.lower().startswith("سجل المحادثة"):
         try:
-            caption = make_caption(current_title, message.chat.id)
+            record_title = text.split(" ", 2)[-1].strip()
+            if not record_title:
+                await message.reply("❌ الرجاء كتابة اسم بعد الأمر.")
+                return
+            is_recording = True
+            record_start_time = datetime.now()
+            await message.reply(f"✅ بدأ التسجيل: {record_title}")
+        except Exception as e:
+            await message.reply(f"❌ خطأ أثناء البدء: {e}")
 
-            # أفضل خيار هنا: نرسل الملف كـ document لكي يبقى كما هو (.ogg)
+    # === إيقاف التسجيل ===
+    elif text.lower().startswith("أوقف التسجيل"):
+        if not is_recording:
+            await message.reply("❌ لا يوجد تسجيل قيد التشغيل.")
+            return
+
+        is_recording = False
+        record_end_time = datetime.now()
+
+        filename = f"{record_start_time.strftime('%Y-%m-%d_%H-%M')}_{record_title}.ogg"
+        filepath = f"./{filename}"
+
+        # إنشاء ملف تجريبي صغير (كتم صوت فقط)
+        with open(filepath, "wb") as f:
+            f.write(b"\x00" * 1000)
+
+        try:
             await app.send_document(
                 chat_id=CHANNEL_ID,
-                document=current_file,
-                caption=caption
+                document=filepath,
+                caption=(
+                    f"🎙 التسجيل: {record_title}\n"
+                    f"📅 التاريخ: {record_start_time.strftime('%Y-%m-%d %H:%M')}\n"
+                    f"👥 المجموعة: {message.chat.id}"
+                ),
             )
-
-            await message.reply_text(f"✅ تم إرسال التسجيل للقناة: {current_title}")
-
+            await message.reply(f"✅ تم إرسال التسجيل للقناة: {record_title}")
         except Exception as e:
-            # نُظهر للمشرف سبب الفشل
-            await message.reply_text(f"❌ حدث خطأ أثناء إرسال الملف: {e}")
+            await message.reply(f"❌ حدث خطأ أثناء إرسال الملف: {e}")
 
-        # إعادة تعيين المتغيرات
-        is_recording = False
-        current_title = None
-        current_file = None
-        return
+        # حذف الملف بعد الإرسال
+        if os.path.exists(filepath):
+            os.remove(filepath)
 
-    # --- أمر اختياري لإرسال ملف الاختبار يدوياً (/testfile) ---
-    # مفيد للاختبار: المشرف يكتب /testfile في الجروب فيرسل الملف للتأكد
-    if text == "/testfile":
-        # فقط للمشرف
+    # === أمر اختبار الملف ===
+    elif text.lower().startswith("/testfile"):
         try:
-            file_path = os.path.join(os.getcwd(), TEST_FILE)
-            if not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
-                await message.reply_text("❌ ملف الاختبار غير موجود أو فارغ على الخادم.")
-                return
+            test_path = "./testfile.ogg"
+            # إنشاء ملف اختباري إذا لم يكن موجودًا
+            if not os.path.exists(test_path):
+                with open(test_path, "wb") as f:
+                    f.write(b"\x00" * 1000)
 
-            await app.send_document(chat_id=CHANNEL_ID, document=file_path,
-                                    caption=f"🔹 اختبار الإرسال من اليوزربوت\n📅 {datetime.now().strftime('%Y-%m-%d %H:%M')}")
-            await message.reply_text("✅ تم إرسال الملف التجريبي للقناة.")
+            await app.send_document(
+                chat_id=CHANNEL_ID,
+                document=test_path,
+                caption="🔹 اختبار الإرسال من اليوزربوت"
+            )
+            await message.reply("✅ تم إرسال الملف التجريبي للقناة.")
         except Exception as e:
-            await message.reply_text(f"❌ حدث خطأ أثناء إرسال الملف: {e}")
-        return
+            await message.reply(f"❌ حدث خطأ أثناء إرسال الملف: {e}")
 
-    # إن وصلت إلى هنا: لا نفعل أي شيء مع رسائل المشرف غير الأوامر أعلاه
-    return
-
-# -----------------------------
-# تشغيل اليوزربوت
-# -----------------------------
-if __name__ == "__main__":
-    print("✅ Starting userbot...")
-    app.run()
+# === تشغيل التطبيق ===
+print("✅ Userbot is running...")
+app.run()
