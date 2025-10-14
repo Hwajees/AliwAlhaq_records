@@ -101,5 +101,5 @@ async def handle_messages(client, message):
 # تشغيل البوت
 # -----------------------------
 if __name__ == "__main__":
-    print("✅ Starting userbot + web server...")
-    app.run()
+    print("✅ Starting userbot...")
+    app.run()  # هذا سيستمع للرسائل مباشرة في المجموعات والقنوات
