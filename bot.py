@@ -49,17 +49,17 @@ async def handle_messages(client, message):
         return
 
     user_id = message.from_user.id
-
     text = message.text.strip()
 
     # تحقق من صلاحية المشرف
     is_admin = await is_user_admin(message.chat.id, user_id)
 
-    if text.startswith("سجل المحادثة"):
-        if not is_admin:
-            await message.reply("❌ ليس لديك صلاحية استخدام هذا الأمر.")
-            return
+    # تجاهل أي رسالة من عضو عادي تمامًا
+    if not is_admin:
+        return  # لا رد، لا تفاعل
 
+    # --- أوامر المشرف ---
+    if text.startswith("سجل المحادثة"):
         if is_recording:
             await message.reply("⚠️ التسجيل جارٍ بالفعل!")
             return
@@ -72,17 +72,12 @@ async def handle_messages(client, message):
         await message.reply(f"✅ بدأ التسجيل: {title}")
 
     elif text.startswith("أوقف التسجيل"):
-        if not is_admin:
-            await message.reply("❌ ليس لديك صلاحية استخدام هذا الأمر.")
-            return
-
         if not is_recording:
             await message.reply("⚠️ لا يوجد تسجيل جارٍ الآن!")
             return
 
         is_recording = False
 
-        # للتحقق يمكن تجربة إرسال ملف تجريبي بدلاً من التسجيل الحقيقي
         test_file = "test_audio.ogg"  # يجب رفعه في مجلد المشروع
         if not os.path.exists(test_file):
             await message.reply("❌ حدث خطأ: الملف التجريبي غير موجود.")
@@ -94,11 +89,6 @@ async def handle_messages(client, message):
             await message.reply(f"✅ تم إرسال التسجيل للقناة: {current_title}")
         except Exception as e:
             await message.reply(f"❌ حدث خطأ أثناء إرسال الملف: {e}")
-
-    else:
-        if not is_admin:
-            await message.reply("❌ ليس لديك صلاحية")
-        # المشرف أو المالك يمكن تجاهل أي رسالة عادية
 
 # -----------------------------
 # تشغيل البوت
