@@ -1,63 +1,48 @@
-import os
+import sys
+sys.path.append("libs")
+
 from pyrogram import Client, filters
-from pyrogram.enums import ChatMembersFilter
 from pytgcalls import PyTgCalls
-from pytgcalls.types.input_stream import InputStream
-from pytgcalls.types.input_stream.input_audio import InputAudio
+from pytgcalls.types import AudioPiped
 
-# -----------------------------
-# إعدادات البوت
-# -----------------------------
-API_ID = int(os.environ.get("API_ID"))
-API_HASH = os.environ.get("API_HASH")
-SESSION_STRING = os.environ.get("SESSION_STRING")
-GROUP_ID = int(os.environ.get("GROUP_ID"))
+# 🔹 ضع بياناتك هنا
+API_ID = int("ضع_هنا_API_ID")
+API_HASH = "ضع_هنا_API_HASH"
+SESSION_STRING = "ضع_هنا_STRING_SESSION"
 
-app = Client("userbot", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING)
-pytgcalls = PyTgCalls(app)
+# 🔹 إنشاء عميل Pyrogram
+app = Client(
+    ":memory:",
+    api_id=API_ID,
+    api_hash=API_HASH,
+    session_string=SESSION_STRING
+)
 
-# -----------------------------
-# دوال مساعدة
-# -----------------------------
-async def is_user_admin(chat_id, user_id):
+# 🔹 إنشاء عميل المكالمات الصوتية
+call = PyTgCalls(app)
+
+# 🔹 أمر الصعود للمحادثة الصوتية
+@app.on_message(filters.command("صعد", prefixes=["", "/"]))
+async def join_vc(client, message):
+    chat_id = message.chat.id
     try:
-        async for member in app.get_chat_members(chat_id, filter=ChatMembersFilter.ADMINISTRATORS):
-            if member.user.id == user_id:
-                return True
-        return False
+        await call.join_group_call(chat_id, AudioPiped("silence.mp3"))
+        await message.reply("✅ صعدت إلى المحادثة الصوتية.")
     except Exception as e:
-        print("Error checking admin:", e)
-        return False
+        await message.reply(f"❌ حدث خطأ أثناء الصعود: {e}")
 
-# -----------------------------
-# أوامر المجموعة
-# -----------------------------
-@app.on_message(filters.group & filters.text)
-async def handle_messages(client, message):
-    if str(message.chat.id) != str(GROUP_ID):
-        return
+# 🔹 أمر النزول من المحادثة الصوتية
+@app.on_message(filters.command("انزل", prefixes=["", "/"]))
+async def leave_vc(client, message):
+    chat_id = message.chat.id
+    try:
+        await call.leave_group_call(chat_id)
+        await message.reply("⬇️ نزلت من المحادثة الصوتية.")
+    except Exception as e:
+        await message.reply(f"❌ حدث خطأ أثناء النزول: {e}")
 
-    user_id = message.from_user.id
-    text = message.text.strip()
-    is_admin = await is_user_admin(message.chat.id, user_id)
-
-    if text.startswith("اصعد الصوت"):
-        if not is_admin:
-            return  # لا يرد على الأعضاء العاديين
-
-        try:
-            await pytgcalls.join_group_call(
-                GROUP_ID,
-                InputStream(InputAudio("silence.mp3")),  # الملف الصوتي المؤقت
-            )
-            await message.reply("✅ تم الانضمام للمحادثة الصوتية بنجاح!")
-        except Exception as e:
-            await message.reply(f"❌ فشل الانضمام للمحادثة الصوتية: {e}")
-
-# -----------------------------
-# تشغيل البوت
-# -----------------------------
+# 🔹 تشغيل البوت
 if __name__ == "__main__":
-    app.start()
-    pytgcalls.start()
-    print("🚀 Userbot Voice Step 1 started")
+    call.start()
+    print("🚀 البوت يعمل الآن وينتظر الأوامر...")
+    app.run()
