@@ -1,10 +1,9 @@
 import os
-import subprocess
 from datetime import datetime
-from threading import Thread
 from pyrogram import Client, filters
 from pyrogram.enums import ChatMembersFilter
 from flask import Flask
+import threading
 
 # -----------------------------
 # إعدادات البوت
@@ -13,7 +12,7 @@ API_ID = int(os.environ.get("API_ID"))
 API_HASH = os.environ.get("API_HASH")
 SESSION_STRING = os.environ.get("SESSION_STRING")
 GROUP_ID = int(os.environ.get("GROUP_ID"))
-CHANNEL_ID = os.environ.get("CHANNEL_ID")  # يمكن وضع اسم القناة مثل "@AliwAlhaq_records"
+CHANNEL_ID = os.environ.get("CHANNEL_ID")
 
 app = Client("userbot", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING)
 
@@ -52,15 +51,12 @@ async def handle_messages(client, message):
 
     user_id = message.from_user.id
     text = message.text.strip()
-
-    # تحقق من صلاحية المشرف
     is_admin = await is_user_admin(message.chat.id, user_id)
 
-    if not is_admin:
-        # لا نرد على الأعضاء العاديين
-        return
-
     if text.startswith("سجل المحادثة"):
+        if not is_admin:
+            return
+
         if is_recording:
             await message.reply("⚠️ التسجيل جارٍ بالفعل!")
             return
@@ -73,16 +69,18 @@ async def handle_messages(client, message):
         await message.reply(f"✅ بدأ التسجيل: {title}")
 
     elif text.startswith("أوقف التسجيل"):
+        if not is_admin:
+            return
+
         if not is_recording:
             await message.reply("⚠️ لا يوجد تسجيل جارٍ الآن!")
             return
 
         is_recording = False
 
-        # إرسال الملف التجريبي بدل التسجيل الحقيقي
-        test_file = "test_audio.ogg"  # يجب رفعه في مجلد المشروع
+        test_file = "test_audio.ogg"
         if not os.path.exists(test_file):
-            await message.reply("❌ حدث خطأ: الملف التجريبي غير موجود.")
+            await message.reply("❌ الملف التجريبي غير موجود.")
             return
 
         try:
@@ -90,26 +88,23 @@ async def handle_messages(client, message):
             await app.send_audio(CHANNEL_ID, audio=test_file, caption=caption)
             await message.reply(f"✅ تم إرسال التسجيل للقناة: {current_title}")
         except Exception as e:
-            await message.reply(f"❌ حدث خطأ أثناء إرسال الملف: {e}")
+            await message.reply(f"❌ خطأ أثناء إرسال الملف: {e}")
+
 
 # -----------------------------
-# Flask Web Server صغير
+# تشغيل Flask مع Pyrogram
 # -----------------------------
-flask_app = Flask("")
+flask_app = Flask(__name__)
 
 @flask_app.route("/")
 def home():
-    return "Userbot is running."
+    return "Bot is running!"
 
 def run_flask():
-    flask_app.run(host="0.0.0.0", port=8080)
+    port = int(os.environ.get("PORT", 10000))  # Render يرسل هذا المتغير
+    flask_app.run(host="0.0.0.0", port=port)
 
-# -----------------------------
-# تشغيل البوت والسيرفر
-# -----------------------------
 if __name__ == "__main__":
     print("🚀 Starting userbot...")
-    # شغل Flask server في Thread منفصل
-    Thread(target=run_flask).start()
-    # شغل Pyrogram
+    threading.Thread(target=run_flask).start()  # تشغيل Flask في خيط منفصل
     app.run()
