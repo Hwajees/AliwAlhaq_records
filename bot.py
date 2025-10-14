@@ -8,7 +8,7 @@ from pyrogram.types import Message
 API_ID = int(os.environ.get("API_ID"))
 API_HASH = os.environ.get("API_HASH")
 SESSION_STRING = os.environ.get("SESSION_STRING")
-CHANNEL = os.environ.get("CHANNEL")  # يمكن أن يكون @اسم_القناة
+CHANNEL = os.environ.get("CHANNEL")  # @اسم_القناة أو -100xxxx
 GROUP = int(os.environ.get("GROUP_ID"))
 
 # --- إنشاء Client Userbot ---
@@ -27,7 +27,8 @@ audio_file_path = None
 # --- التحقق إذا كان المستخدم مشرف ---
 async def is_user_admin(chat_id, user_id):
     try:
-        async for member in app.get_chat_members(chat_id, filter="administrators"):
+        from pyrogram.enums import ChatMembersFilter
+        async for member in app.get_chat_members(chat_id, filter=ChatMembersFilter.ADMINISTRATORS):
             if member.user.id == user_id:
                 return True
         return False
@@ -35,15 +36,13 @@ async def is_user_admin(chat_id, user_id):
         return False
 
 # --- إرسال ملف للقناة ---
-async def send_audio_to_channel(title):
-    global audio_file_path
-    if not audio_file_path or not os.path.exists(audio_file_path):
-        return False, "❌ حدث خطأ: الملف الصوتي غير موجود"
+async def send_audio_to_channel(title, file_path):
     try:
+        if not os.path.exists(file_path):
+            return False, "❌ الملف الصوتي غير موجود"
         now = datetime.now().strftime("%Y-%m-%d %H:%M")
         caption = f"🎙 التسجيل: {title}\n📅 التاريخ: {now}\n👥 المجموعة: {GROUP}"
-        await app.send_audio(CHANNEL, audio_file_path, caption=caption)
-        os.remove(audio_file_path)  # حذف الملف بعد الإرسال
+        await app.send_audio(CHANNEL, file_path, caption=caption)
         return True, f"✅ تم إرسال التسجيل للقناة: {title}"
     except Exception as e:
         return False, f"❌ حدث خطأ أثناء إرسال الملف: {str(e)}"
@@ -58,16 +57,16 @@ async def handle_messages(client, message: Message):
     # التحقق من الصلاحية
     is_admin = await is_user_admin(message.chat.id, user_id)
 
-    # أوامر المشرف فقط
+    # التعامل فقط مع أوامر المشرفين
     if is_admin:
         if text.startswith("سجل المحادثة"):
             title = text.replace("سجل المحادثة", "").strip() or "بدون عنوان"
             recording = True
             current_title = title
             audio_file_path = f"{datetime.now().strftime('%Y-%m-%d_%H-%M')}_{title}.ogg"
-            # هنا فقط ننشئ الملف الفارغ كتجربة، لاحقاً يمكن التسجيل الحقيقي
+            # إنشاء ملف فارغ كتجربة
             with open(audio_file_path, "wb") as f:
-                f.write(b"")  
+                f.write(b"")
             await message.reply(f"✅ بدأ التسجيل: {title}")
             return
 
@@ -76,14 +75,15 @@ async def handle_messages(client, message: Message):
                 await message.reply("❌ لا يوجد تسجيل جاري")
                 return
             recording = False
-            success, reply_text = await send_audio_to_channel(current_title)
-            await message.reply(reply_text)
+            success, reply_text = await send_audio_to_channel(current_title, audio_file_path)
+            if success:
+                os.remove(audio_file_path)
             current_title = None
             audio_file_path = None
+            await message.reply(reply_text)
             return
 
         if text.startswith("/testfile"):
-            # إرسال ملف تجريبي للقناة
             test_file = "test_audio.ogg"
             if not os.path.exists(test_file):
                 await message.reply("❌ الملف التجريبي غير موجود")
@@ -94,11 +94,6 @@ async def handle_messages(client, message: Message):
             except Exception as e:
                 await message.reply(f"❌ حدث خطأ أثناء إرسال الملف: {str(e)}")
             return
-
-    else:
-        # الرد على الأعضاء العاديين
-        if text:
-            await message.reply("❌ ليس لديك الصلاحية")
 
 # --- تشغيل اليوزبوت ---
 if __name__ == "__main__":
