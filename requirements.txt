@@ -1,5 +1,5 @@
 pyrogram==2.0.106
 tgcrypto==1.2.5
 flask==2.3.3
-pytgcalls==2.1.0
 tgcalls==3.0.0.dev6
+pytgcalls==3.0.0.dev6
