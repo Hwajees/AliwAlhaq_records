@@ -7,3 +7,7 @@
 
 # مجلد __pycache__
 __pycache__/
+
+# venv (لا ترفع بيئة افتراضية)
+.venv/
+venv/
