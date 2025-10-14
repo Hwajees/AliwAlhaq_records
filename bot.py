@@ -7,7 +7,7 @@ from pytgcalls import PyTgCalls
 # إعدادات البوت
 # -----------------------------
 API_ID = int(os.environ.get("API_ID"))
-API_HASH = os.environ.get("API_HASH"))
+API_HASH = os.environ.get("API_HASH")
 SESSION_STRING = os.environ.get("SESSION_STRING")
 GROUP_ID = int(os.environ.get("GROUP_ID"))
 
@@ -56,3 +56,4 @@ async def handle_messages(client, message):
 if __name__ == "__main__":
     print("🚀 Starting userbot...")
     app.run()
+
