@@ -2,102 +2,89 @@ import os
 import asyncio
 from datetime import datetime
 from pyrogram import Client, filters
-from pyrogram.types import Message
-import threading
-from http.server import BaseHTTPRequestHandler, HTTPServer
 from pyrogram.enums import ChatMembersFilter
+from pyrogram.types import Message
 
-# ==========================
-# المتغيرات
-# ==========================
+# إعدادات البيئة
 API_ID = int(os.environ.get("API_ID"))
 API_HASH = os.environ.get("API_HASH")
-SESSION_STRING = os.environ.get("SESSION_STRING")  # سلسلة الجلسة لليوزربوت
+SESSION_NAME = os.environ.get("SESSION_NAME", "userbot_session")
+GROUP_ID = int(os.environ.get("GROUP_ID"))           # ايدي المجموعة
+CHANNEL_ID = os.environ.get("CHANNEL_ID")            # اسم القناة @اسم_القناة
 
-GROUP_ID = int(os.environ.get("GROUP_ID"))  # معرف المجموعة
-CHANNEL_ID = os.environ.get("CHANNEL_ID")   # اسم القناة بدون @ مثال: AliwAlhaq_records
+# مسارات الملفات
+RECORDINGS_DIR = "./recordings"
+TEST_AUDIO = "./test_audio.ogg"
 
-# ==========================
 # إعداد اليوزربوت
-# ==========================
-app = Client("userbot", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING)
+app = Client(
+    SESSION_NAME,
+    api_id=API_ID,
+    api_hash=API_HASH
+)
 
-# ==========================
-# خادم وهمي لإرضاء Render
-# ==========================
-class SimpleHandler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        self.send_response(200)
-        self.end_headers()
-        self.wfile.write(b"Userbot is running!")
+# حالة التسجيل
+recording = False
+current_title = ""
 
-def run_server():
-    server = HTTPServer(("0.0.0.0", 10000), SimpleHandler)
-    server.serve_forever()
-
-threading.Thread(target=run_server, daemon=True).start()
-
-# ==========================
-# متغيرات تسجيل
-# ==========================
-is_recording = False
-recording_name = ""
-
-# ==========================
-# تحقق من المشرف
-# ==========================
-sync def is_user_admin(chat_id, user_id):
+# تحقق من كون المستخدم مشرف أو مالك
+async def is_user_admin(chat_id, user_id):
     async for member in app.get_chat_members(chat_id, filter=ChatMembersFilter.ADMINISTRATORS):
         if member.user.id == user_id:
             return True
     return False
 
-# ==========================
-# معالجة الرسائل
-# ==========================
-@app.on_message(filters.group & filters.text)
-async def handle_messages(client: Client, message: Message):
-    global is_recording, recording_name
+# بدء التسجيل
+async def start_recording(title):
+    global recording, current_title
+    recording = True
+    current_title = title
+
+# إيقاف التسجيل وإرسال الملف للقناة
+async def stop_recording():
+    global recording, current_title
+    recording = False
+    filename = f"{datetime.now().strftime('%Y-%m-%d_%H-%M')}_{current_title}.ogg"
+    filepath = os.path.join(RECORDINGS_DIR, filename)
+
+    # إذا كان الملف موجود أرسل الملف التجريبي
+    if os.path.exists(TEST_AUDIO):
+        try:
+            await app.send_audio(
+                CHANNEL_ID,
+                TEST_AUDIO,
+                caption=f"🎙 التسجيل: {current_title}\n📅 التاريخ: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n👥 المجموعة: {GROUP_ID}"
+            )
+            return True
+        except Exception as e:
+            return f"❌ حدث خطأ أثناء إرسال الملف: {e}"
+    else:
+        return f"❌ ملف الاختبار غير موجود: {TEST_AUDIO}"
+
+# التعامل مع الرسائل
+@app.on_message(filters.chat(GROUP_ID))
+async def handle_messages(client, message: Message):
+    global recording, current_title
 
     user_id = message.from_user.id
-    text = message.text.strip()
+    is_admin = await is_user_admin(GROUP_ID, user_id)
 
-    # تحقق من المشرف
-    if not await is_user_admin(message.chat.id, user_id):
-        # تجاهل الأعضاء العاديين تماما
-        return
+    if not is_admin:
+        return  # تجاهل الرسائل من الأعضاء العاديين
 
-    # أوامر التسجيل
+    text = message.text or ""
+
     if text.startswith("سجل المحادثة"):
-        recording_name = text.replace("سجل المحادثة", "").strip()
-        if recording_name == "":
-            recording_name = "تسجيل_بدون_اسم"
-        is_recording = True
-        await message.reply_text(f"✅ بدأ التسجيل: {recording_name}")
-        return
+        title = text.replace("سجل المحادثة", "").strip()
+        await start_recording(title)
+        await message.reply(f"✅ بدأ التسجيل: {title}")
 
-    if text == "أوقف التسجيل":
-        if not is_recording:
-            await message.reply_text("❌ لم يتم بدء التسجيل مسبقاً.")
-            return
-        is_recording = False
+    elif text.startswith("أوقف التسجيل"):
+        result = await stop_recording()
+        if result is True:
+            await message.reply(f"✅ تم إرسال التسجيل للقناة: {current_title}")
+        else:
+            await message.reply(result)
 
-        # بناء اسم الملف
-        date_str = datetime.now().strftime("%Y-%m-%d_%H-%M")
-        file_name = f"{date_str}_{recording_name}.ogg"
-
-        # إرسال ملف اختباري للقناة
-        test_file = "test_audio.ogg"  # يجب وضع الملف في نفس مجلد المشروع
-        try:
-            await app.send_audio(CHANNEL_ID, test_file,
-                                 caption=f"🎙 التسجيل: {recording_name}\n📅 التاريخ: {date_str}\n👥 المجموعة: {message.chat.id}")
-            await message.reply_text(f"✅ تم إرسال التسجيل للقناة: {recording_name}")
-        except Exception as e:
-            await message.reply_text(f"❌ حدث خطأ أثناء إرسال الملف: {e}")
-        return
-
-# ==========================
 # تشغيل اليوزربوت
-# ==========================
 app.run()
-
