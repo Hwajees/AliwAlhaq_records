@@ -2,9 +2,6 @@ import os
 from datetime import datetime
 from pyrogram import Client, filters
 
-# -----------------------------
-# إعدادات البوت من Render
-# -----------------------------
 API_ID = int(os.environ.get("API_ID"))
 API_HASH = os.environ.get("API_HASH")
 SESSION_STRING = os.environ.get("SESSION_STRING")
@@ -13,55 +10,51 @@ CHANNEL_ID = int(os.environ.get("CHANNEL_ID"))
 
 app = Client("userbot", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING)
 
-# -----------------------------
-# متغيرات التسجيل
-# -----------------------------
 is_recording = False
 current_title = ""
 current_file = ""
 
-# -----------------------------
-# دالة مساعدة
-# -----------------------------
+
 def sanitize_filename(name):
     return "".join(c if c.isalnum() else "_" for c in name)
 
-async def is_admin(chat_id, user_or_chat):
+
+async def is_admin(chat_id, user_id):
     """
-    تفحص إن كان المستخدم أو القناة مشرفًا في المجموعة.
+    يفحص إن كان المستخدم أو القناة مشرفًا فعلاً في المجموعة.
     """
     try:
-        member = await app.get_chat_member(chat_id, user_or_chat)
-        return member.status in ("creator", "administrator")
-    except Exception:
+        admins = await app.get_chat_administrators(chat_id)
+        admin_ids = [a.user.id for a in admins if a.user]
+        return user_id in admin_ids
+    except Exception as e:
+        print("خطأ في جلب قائمة المشرفين:", e)
         return False
 
-# -----------------------------
-# أوامر المجموعة
-# -----------------------------
+
 @app.on_message(filters.group & filters.text)
 async def handle_messages(client, message):
     global is_recording, current_title, current_file
 
-    if str(message.chat.id) != str(GROUP_ID):
-        return  # تجاهل المجموعات الأخرى
+    if message.chat.id != GROUP_ID:
+        return
 
-    # تجاهل أي نص غير أوامرنا
+    # تجاهل أي شيء ليس أوامرنا
     if not message.text.startswith(("سجل المحادثة", "أوقف التسجيل")):
         return
 
-    # التحقق من المرسل
-    sender_id = None
-    sender_name = "مجهول"
-
+    # تحديد هوية المرسل
     if message.from_user:
         sender_id = message.from_user.id
         sender_name = message.from_user.first_name
     elif message.sender_chat:
         sender_id = message.sender_chat.id
         sender_name = message.sender_chat.title
+    else:
+        return
 
-    if not sender_id or not await is_admin(message.chat.id, sender_id):
+    # التحقق من كونه مشرفًا
+    if not await is_admin(GROUP_ID, sender_id):
         await message.reply("❌ ليس لديك صلاحية استخدام هذا الأمر (خاص بالمشرفين).")
         return
 
@@ -96,19 +89,14 @@ async def handle_messages(client, message):
         )
 
         if os.path.exists(current_file):
-            try:
-                await app.send_voice(CHANNEL_ID, voice=current_file, caption=caption)
-                os.remove(current_file)
-                await message.reply(f"✅ تم إيقاف التسجيل وإرساله للقناة.")
-            except Exception as e:
-                await message.reply(f"❌ فشل إرسال الملف: {e}")
+            await app.send_voice(CHANNEL_ID, voice=current_file, caption=caption)
+            os.remove(current_file)
+            await message.reply("✅ تم إيقاف التسجيل وإرساله للقناة.")
         else:
             await app.send_message(CHANNEL_ID, f"📌 {caption}\n⚠️ لا يوجد ملف صوتي فعلي.")
-            await message.reply(f"✅ تم إيقاف التسجيل (تسجيل افتراضي فقط).")
+            await message.reply("✅ تم إيقاف التسجيل (تسجيل رمزي فقط).")
 
-# -----------------------------
-# تشغيل اليوزربوت
-# -----------------------------
+
 if __name__ == "__main__":
     print("✅ Userbot started and waiting for commands...")
     app.run()
