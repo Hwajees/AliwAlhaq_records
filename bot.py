@@ -1,6 +1,11 @@
 import sys
-sys.path.append("libs")
+import os
 
+# أضف مجلد libs إلى sys.path لكي يتعرف بايثون على الحزم المحلية
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "libs"))
+
+# الآن يمكن الاستيراد
+from tgcalls import SomeModule  # حسب الحاجة
 from pyrogram import Client, filters
 from pytgcalls import PyTgCalls
 from pytgcalls.types import AudioPiped
@@ -46,3 +51,4 @@ if __name__ == "__main__":
     call.start()
     print("🚀 البوت يعمل الآن وينتظر الأوامر...")
     app.run()
+
