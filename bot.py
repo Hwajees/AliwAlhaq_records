@@ -1,19 +1,17 @@
 import os
-import subprocess
 from datetime import datetime
 from pyrogram import Client, filters
-from pyrogram.enums import ChatMembersFilter
 
 # -----------------------------
 # إعدادات البوت
 # -----------------------------
 API_ID = int(os.environ.get("API_ID"))
 API_HASH = os.environ.get("API_HASH")
-SESSION_STRING = os.environ.get("SESSION_STRING")
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
 GROUP_ID = int(os.environ.get("GROUP_ID"))
-CHANNEL_ID = os.environ.get("CHANNEL_ID")  # يمكن وضع اسم القناة مثل "@AliwAlhaq_records"
+CHANNEL_ID = os.environ.get("CHANNEL_ID")  # يمكن وضع اسم القناة @اسم_القناة أو -ID
 
-app = Client("userbot", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING)
+app = Client("bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
 # -----------------------------
 # متغيرات تسجيل الصوت
@@ -29,14 +27,11 @@ def sanitize_filename(name):
     return "".join(c if c.isalnum() else "_" for c in name)
 
 async def is_user_admin(chat_id, user_id):
-    try:
-        async for member in app.get_chat_members(chat_id, filter=ChatMembersFilter.ADMINISTRATORS):
-            if member.user.id == user_id:
-                return True
-        return False
-    except Exception as e:
-        print("Error checking admin:", e)
-        return False
+    from pyrogram.enums import ChatMemberStatus
+    async for member in app.get_chat_members(chat_id, filter="administrators"):
+        if member.user.id == user_id or member.status in [ChatMemberStatus.OWNER, ChatMemberStatus.ADMINISTRATOR]:
+            return True
+    return False
 
 # -----------------------------
 # أوامر المجموعة
@@ -49,12 +44,12 @@ async def handle_messages(client, message):
         return
 
     user_id = message.from_user.id
-
     text = message.text.strip()
 
     # تحقق من صلاحية المشرف
     is_admin = await is_user_admin(message.chat.id, user_id)
 
+    # أمر بدء التسجيل
     if text.startswith("سجل المحادثة"):
         if not is_admin:
             await message.reply("❌ ليس لديك صلاحية استخدام هذا الأمر.")
@@ -71,6 +66,7 @@ async def handle_messages(client, message):
         is_recording = True
         await message.reply(f"✅ بدأ التسجيل: {title}")
 
+    # أمر إيقاف التسجيل
     elif text.startswith("أوقف التسجيل"):
         if not is_admin:
             await message.reply("❌ ليس لديك صلاحية استخدام هذا الأمر.")
@@ -81,9 +77,7 @@ async def handle_messages(client, message):
             return
 
         is_recording = False
-
-        # للتحقق يمكن تجربة إرسال ملف تجريبي بدلاً من التسجيل الحقيقي
-        test_file = "test_audio.ogg"  # يجب رفعه في مجلد المشروع
+        test_file = "test_audio.ogg"  # ملف تجريبي للاختبار
         if not os.path.exists(test_file):
             await message.reply("❌ حدث خطأ: الملف التجريبي غير موجود.")
             return
@@ -95,14 +89,13 @@ async def handle_messages(client, message):
         except Exception as e:
             await message.reply(f"❌ حدث خطأ أثناء إرسال الملف: {e}")
 
+    # تجاهل أي رسالة أخرى من الأعضاء العاديين
     else:
         if not is_admin:
-            await message.reply("❌ ليس لديك صلاحية")
-        # المشرف أو المالك يمكن تجاهل أي رسالة عادية
+            return  # لا يفعل شيء للأعضاء العاديين
 
 # -----------------------------
 # تشغيل البوت
 # -----------------------------
 if __name__ == "__main__":
-    print("🚀 Starting userbot...")
     app.run()
