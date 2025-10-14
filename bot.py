@@ -5,7 +5,7 @@ from pyrogram import Client
 # إعدادات البوت
 # -----------------------------
 API_ID = int(os.environ.get("API_ID"))
-API_HASH = os.environ.get("API_HASH"))
+API_HASH = os.environ.get("API_HASH")
 SESSION_STRING = os.environ.get("SESSION_STRING")
 CHANNEL_ID = int(os.environ.get("CHANNEL_ID"))
 
@@ -22,3 +22,4 @@ async def main():
     print("تم إرسال الرسالة والملف بنجاح ✅")
 
 app.run(main())
+
