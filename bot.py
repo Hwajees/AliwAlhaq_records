@@ -12,9 +12,10 @@ GROUP_ID = int(os.environ.get("GROUP_ID"))  # مثال: -1001234567890
 
 # تهيئة اليوزربوت
 app = Client(
-    session_string=STRING_SESSION,
+    "my_account",
     api_id=API_ID,
     api_hash=API_HASH,
+    session_string=STRING_SESSION
 )
 
 # حالة التسجيل
@@ -67,3 +68,4 @@ async def handle_messages(client, message):
 
 # تشغيل اليوزربوت
 app.run()
+
