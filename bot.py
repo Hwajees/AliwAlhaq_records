@@ -1,9 +1,9 @@
 import os
-import subprocess
-from datetime import datetime
-from pyrogram import Client, filters
-from flask import Flask
 import threading
+from datetime import datetime
+from flask import Flask
+from pyrogram import Client, filters
+from pyrogram.enums import ChatMembersFilter
 
 # -----------------------------
 # إعدادات اليوزربوت
@@ -13,7 +13,7 @@ API_HASH = os.environ.get("API_HASH")
 SESSION_STRING = os.environ.get("SESSION_STRING")
 GROUP_ID = int(os.environ.get("GROUP_ID"))
 CHANNEL_ID = int(os.environ.get("CHANNEL_ID"))
-PORT = int(os.environ.get("PORT", 10000))  # ضروري للويب سيرفس
+PORT = int(os.environ.get("PORT", 10000))  # ضروري لعمل Render Web Service
 
 app = Client("userbot", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING)
 
@@ -31,13 +31,13 @@ def sanitize_filename(name):
     return "".join(c if c.isalnum() else "_" for c in name)
 
 async def is_user_admin(chat_id, user_id):
-    async for member in app.get_chat_members(chat_id, filter="administrators"):
+    async for member in app.get_chat_members(chat_id, filter=ChatMembersFilter.ADMINISTRATORS):
         if member.user.id == user_id:
             return True
     return False
 
 # -----------------------------
-# أوامر المجموعة
+# الأوامر داخل المجموعة
 # -----------------------------
 @app.on_message(filters.group & filters.text)
 async def handle_messages(client, message):
@@ -48,13 +48,13 @@ async def handle_messages(client, message):
 
     text = message.text.strip()
 
-    # تحقق من أن المرسل مشرف
+    # التحقق من صلاحيات المستخدم
     is_admin = await is_user_admin(message.chat.id, message.from_user.id)
     if not is_admin:
         await message.reply("❌ ليس لديك صلاحية استخدام هذا الأمر.")
         return
 
-    # بدء التسجيل
+    # أمر بدء التسجيل
     if text.startswith("سجل المحادثة"):
         if is_recording:
             await message.reply("⚠️ التسجيل جارٍ بالفعل!")
@@ -67,7 +67,7 @@ async def handle_messages(client, message):
         is_recording = True
         await message.reply(f"✅ بدأ التسجيل: {title}")
 
-    # إيقاف التسجيل
+    # أمر إيقاف التسجيل
     elif text.startswith("أوقف التسجيل"):
         if not is_recording:
             await message.reply("⚠️ لا يوجد تسجيل جارٍ الآن!")
@@ -76,29 +76,27 @@ async def handle_messages(client, message):
         is_recording = False
         caption = f"🎙 التسجيل: {current_title}\n📅 التاريخ: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n👥 المجموعة: {GROUP_ID}"
 
-        # إرسال الملف كما هو (بدون تحويل)
-        await app.send_audio(CHANNEL_ID, audio=current_file, caption=caption)
-
-        # حذف الملف بعد الإرسال
+        # إرسال التسجيل إلى القناة
         if os.path.exists(current_file):
+            await app.send_audio(CHANNEL_ID, audio=current_file, caption=caption)
             os.remove(current_file)
 
-        await message.reply(f"✅ تم إيقاف التسجيل وأُرسل إلى القناة.")
+        await message.reply("✅ تم إيقاف التسجيل وأُرسل إلى القناة.")
 
 # -----------------------------
-# Flask للحفاظ على السيرفر حيّ
+# خادم Flask للحفاظ على السيرفر حيّ
 # -----------------------------
 web_app = Flask(__name__)
 
 @web_app.route('/')
 def home():
-    return "✅ Userbot is running!"
+    return "✅ Userbot is running successfully!"
 
 def run_web():
     web_app.run(host="0.0.0.0", port=PORT)
 
 # -----------------------------
-# تشغيل البوت والخادم معًا
+# تشغيل اليوزربوت والخادم معًا
 # -----------------------------
 if __name__ == "__main__":
     print("🚀 Starting userbot + web server...")
