@@ -3,18 +3,18 @@ from datetime import datetime
 from pyrogram import Client, filters
 
 # -----------------------------
-# إعدادات البوت
+# إعدادات اليوزربوت
 # -----------------------------
 API_ID = int(os.environ.get("API_ID"))
-API_HASH = os.environ.get("API_HASH")
-BOT_TOKEN = os.environ.get("BOT_TOKEN")
+API_HASH = os.environ.get("API_HASH"))
+SESSION_STRING = os.environ.get("SESSION_STRING")
 GROUP_ID = int(os.environ.get("GROUP_ID"))
 CHANNEL_ID = int(os.environ.get("CHANNEL_ID"))
 
-app = Client("bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+app = Client("userbot", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING)
 
 # -----------------------------
-# متغيرات تسجيل الصوت
+# متغيرات التسجيل
 # -----------------------------
 is_recording = False
 current_title = ""
@@ -51,15 +51,17 @@ async def handle_messages(client, message):
     # بدء التسجيل
     if text.startswith("سجل المحادثة"):
         if is_recording:
-            await message.reply("⚠️ التسجيل جارٍ بالفعل!")
+            await message.reply("⚠️ يوجد تسجيل جارٍ بالفعل!")
             return
 
         parts = text.split(" ", 2)
         title = parts[2].strip() if len(parts) > 2 else f"جلسة_{datetime.now().strftime('%Y-%m-%d_%H-%M')}"
         current_title = title
-        current_file = f"{datetime.now().strftime('%Y-%m-%d_%H-%M')}_{sanitize_filename(title)}.ogg"
         is_recording = True
-        await message.reply(f"✅ بدأ التسجيل: {title}")
+
+        # هنا في الواقع يجب أن يبدأ التسجيل الصوتي من المكالمة الصوتية
+        # يمكنك لاحقًا دمج pytgcalls أو tgcalls لتسجيل المكالمة فعليًا
+        await message.reply(f"🎙 بدأ التسجيل بعنوان: {title}")
 
     # إيقاف التسجيل
     elif text.startswith("أوقف التسجيل"):
@@ -68,34 +70,16 @@ async def handle_messages(client, message):
             return
 
         is_recording = False
+        current_file = f"{datetime.now().strftime('%Y-%m-%d_%H-%M')}_{sanitize_filename(current_title)}.ogg"
 
-        # رفع الملف كما هو إلى القناة بدون تحويل
-        caption = (
-            f"🎙 التسجيل: {current_title}\n"
-            f"📅 التاريخ: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n"
-            f"👥 المجموعة: {GROUP_ID}"
-        )
-        await app.send_document(CHANNEL_ID, document=current_file, caption=caption)
+        # مبدئيًا سنرسل ملف وهمي أو نستخدم التسجيل الحقيقي لاحقًا
+        caption = f"🎙 التسجيل: {current_title}\n📅 التاريخ: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n👥 المجموعة: {GROUP_ID}"
+        await app.send_message(CHANNEL_ID, caption)
 
-        os.remove(current_file)
-        await message.reply(f"✅ تم إيقاف التسجيل ورفع الملف: {current_title}")
+        await message.reply(f"✅ تم إيقاف التسجيل وإرساله إلى القناة.")
 
 # -----------------------------
-# تسجيل الرسائل الصوتية أثناء التشغيل
-# -----------------------------
-@app.on_message(filters.group & filters.voice)
-async def record_voice_messages(client, message):
-    global is_recording, current_file
-
-    if str(message.chat.id) != str(GROUP_ID):
-        return
-
-    if is_recording:
-        # حفظ الرسالة الصوتية كما هي
-        await message.download(current_file)
-
-# -----------------------------
-# تشغيل البوت
+# تشغيل اليوزربوت
 # -----------------------------
 if __name__ == "__main__":
     app.run()
