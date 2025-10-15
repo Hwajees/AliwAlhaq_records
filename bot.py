@@ -57,13 +57,11 @@ async def handle_audio(client: Client, message: Message):
     pending_audio[user.id] = file_info
 
     # زر للمحادثة الخاصة
-    keyboard = InlineKeyboardMarkup(
-        [[InlineKeyboardButton("📩 افتح المحادثة الخاصة", url=f"https://t.me/{user.username}?start=archive")]]
-    )
-    await message.reply_text(
-        "تم استلام المقطع الصوتي ✅\nاضغط الزر للمتابعة في المحادثة الخاصة.",
-        reply_markup=keyboard
-    )
+    bot_username = (await client.get_me()).username
+await message.reply_text(
+    f"تم استلام المقطع الصوتي ✅\n"
+    f"اضغط هنا للمحادثة الخاصة مع البوت: https://t.me/{bot_username}?start=archive"
+)
 
 # -----------------------------
 # التفاعل في المحادثة الخاصة لجمع العنوان والمتحدث
@@ -151,3 +149,4 @@ if __name__ == "__main__":
     print("🚀 Starting userbot...")
     threading.Thread(target=run_flask).start()
     app.run()
+
