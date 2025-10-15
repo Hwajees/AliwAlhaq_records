@@ -5,7 +5,6 @@ from pyrogram.enums import ChatMembersFilter
 from flask import Flask
 import threading
 from mutagen import File as MutagenFile  # لإستخراج مدة المقطع
-import math
 
 # -----------------------------
 # إعدادات Userbot
@@ -16,7 +15,6 @@ SESSION_STRING = os.environ.get("SESSION_STRING")
 GROUP_ID = int(os.environ.get("GROUP_ID"))            
 CHANNEL_ID = os.environ.get("CHANNEL_ID")            
 USERNAME = os.environ.get("USERNAME")                
-GROUP_USERNAME = os.environ.get("GROUP_USERNAME")    # جديد: @AliwAlhaq
 
 app = Client(
     "userbot",
@@ -87,7 +85,7 @@ async def receive_text_private(client, message):
 
     if 'title' not in state:
         state['title'] = message.text.strip()
-        await message.reply_text("حسنًا ✅، الآن أرسل اسم المتحدث الرئيسي:")
+        await message.reply_text("حسنًا ✅، الآن أرسل اسم المتحدث:")
         return
 
     if 'speaker' not in state:
@@ -96,7 +94,7 @@ async def receive_text_private(client, message):
         return
 
 # -----------------------------
-# أرشفة المقطع للقناة مع مدة المقطع واسم المجموعة
+# أرشفة المقطع للقناة مع مدة المقطع واسم المجموعة ثابت
 # -----------------------------
 async def archive_to_channel(user_id, message):
     state = user_states.get(user_id)
@@ -119,13 +117,13 @@ async def archive_to_channel(user_id, message):
     except:
         duration_text = "غير متوفر"
 
-    # الكابتشن مع فواصل بين الأسطر
+    # الكابتشن مع فواصل بين الأسطر واسم المجموعة ثابت
     caption = (
         f"🎙 العنوان: {title}\n\n"
-        f"👤 المتحدث الرئيسي: {speaker}\n\n"
+        f"👤 المتحدث: {speaker}\n\n"
         f"⏱ مدة المقطع: {duration_text}\n\n"
         f"📅 التاريخ: {date}\n\n"
-        f"👥 المجموعة: @{GROUP_USERNAME}"
+        f"👥 المجموعة: @AliwAlhaq"
     )
 
     try:
