@@ -11,9 +11,9 @@ import threading
 API_ID = int(os.environ.get("API_ID"))
 API_HASH = os.environ.get("API_HASH")
 SESSION_STRING = os.environ.get("SESSION_STRING")
-GROUP_ID = int(os.environ.get("GROUP_ID"))
-CHANNEL_ID = int(os.environ.get("CHANNEL_ID"))
-USERNAME = os.environ.get("USERNAME")  # بدون @
+GROUP_ID = int(os.environ.get("GROUP_ID"))            # رقم المجموعة
+CHANNEL_ID = os.environ.get("CHANNEL_ID")             # اسم المستخدم للقناة فقط (بدون @)
+USERNAME = os.environ.get("USERNAME")                # اسم المستخدم للـ userbot (بدون @)
 
 app = Client(
     "userbot",
@@ -41,10 +41,13 @@ async def is_user_admin(chat_id, user_id):
 user_states = {}  # key: user_id, value: dict {'file': file_path, 'title': ..., 'speaker': ...}
 
 # -----------------------------
-# استقبال الصوتيات من المشرف في المجموعة
+# استقبال أمر أرشف التسجيل في المجموعة
 # -----------------------------
-@app.on_message(filters.chat(GROUP_ID) & (filters.audio | filters.voice))
-async def handle_audio_group(client, message):
+@app.on_message(filters.chat(GROUP_ID) & filters.text)
+async def handle_archive_command(client, message):
+    if message.text.strip() != "أرشف التسجيل":
+        return
+
     user = message.from_user
     if not user:
         return
@@ -54,7 +57,7 @@ async def handle_audio_group(client, message):
 
     # إنشاء رابط الخاص
     private_url = f"https://t.me/{USERNAME}?start=archive_{user.id}"
-    caption = f"تم استلام المقطع الصوتي ✅\nاضغط هنا للمحادثة الخاصة مع البوت: {private_url}"
+    caption = f"تم استلام طلب أرشفة المقطع ✅\nاضغط هنا للمحادثة الخاصة مع البوت: {private_url}"
 
     await message.reply_text(
         caption,
@@ -116,12 +119,12 @@ async def archive_to_channel(user_id, message):
         f"🎙 العنوان: {title}\n"
         f"👤 المتحدث الرئيسي: {speaker}\n"
         f"📅 التاريخ: {date}\n"
-        f"👥 المجموعة: {GROUP_ID}"
+        f"👥 المجموعة: @{GROUP_ID}"  # يظهر اسم المجموعة
     )
 
     try:
         await app.send_audio(
-            chat_id=CHANNEL_ID,
+            chat_id=f"@{CHANNEL_ID}",   # إرسال باستخدام اسم المستخدم للقناة
             audio=file_path,
             caption=caption
         )
