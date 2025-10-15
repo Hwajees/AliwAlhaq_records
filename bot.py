@@ -1,8 +1,14 @@
 import os
-from pyrogram import Client
-from pytgcalls.pytgcalls.pytgcalls import PyTgCalls  # ✅ المسار الصحيح الآن
+import sys
+from pyrogram import Client, filters
+
+# ✅ نضيف مجلد libs لمسار البحث
+sys.path.append(os.path.join(os.path.dirname(__file__), "libs"))
+
+from pytgcalls.pytgcalls.pytgcalls import PyTgCalls  # الآن سيجده بشكل صحيح
 from pytgcalls import idle
 
+# المتغيرات من بيئة Render
 API_ID = int(os.environ.get("API_ID"))
 API_HASH = os.environ.get("API_HASH")
 SESSION_STRING = os.environ.get("SESSION_STRING")
