@@ -1,52 +1,73 @@
 import os
-import sys
-from pyrogram import Client, filters
+import asyncio
+from pyrogram import Client
+from libs.pytgcalls.pytgcalls.pytgcalls import PyTgCalls  # المسار الجديد
+from pyrogram.types import Message
 
-# ✅ نضيف مجلد libs لمسار البحث
-sys.path.append(os.path.join(os.path.dirname(__file__), "libs"))
-
-from pytgcalls.pytgcalls import PyTgCalls  # الآن سيجده بشكل صحيح
-from pytgcalls import idle
-
+# ======================
 # المتغيرات من بيئة Render
+# ======================
 API_ID = int(os.environ.get("API_ID"))
 API_HASH = os.environ.get("API_HASH")
 SESSION_STRING = os.environ.get("SESSION_STRING")
 GROUP_ID = int(os.environ.get("GROUP_ID"))
+CHANNEL_ID = os.environ.get("CHANNEL_ID"))  # إذا لاحقًا تحتاجه
 
-# إنشاء عميل Pyrogram (جلسة يوزربوت)
-app = Client("userbot", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING)
+# ======================
+# إنشاء اليوزبوت
+# ======================
+app = Client(
+    "userbot",
+    api_id=API_ID,
+    api_hash=API_HASH,
+    session_string=SESSION_STRING
+)
 
-# تهيئة PyTgCalls مع الجلسة
-pytgcalls_client = PyTgCalls(app)
+# ======================
+# إنشاء PyTgCalls instance
+# ======================
+pytgclient = PyTgCalls(app)
 
-@app.on_message(filters.command("join", prefixes=["/", "!"]))
-async def join_call(_, message):
-    chat_id = GROUP_ID
+# ======================
+# أمر الصعود إلى المحادثة الصوتية
+# ======================
+async def join_voice_chat():
     try:
-        await pytgcalls_client.join_group_call(chat_id, "silence.mp3")
-        await message.reply("✅ انضممت إلى المكالمة الصوتية.")
+        await pytgclient.join_group_call(GROUP_ID, "silence.mp3")  # الملف الصوتي التجريبي
+        print("Bot joined the voice chat successfully!")
     except Exception as e:
-        await message.reply(f"❌ خطأ أثناء الانضمام: {e}")
+        print(f"Error joining voice chat: {e}")
 
-@app.on_message(filters.command("leave", prefixes=["/", "!"]))
-async def leave_call(_, message):
-    chat_id = GROUP_ID
+# ======================
+# أمر الخروج من المحادثة الصوتية
+# ======================
+async def leave_voice_chat():
     try:
-        await pytgcalls_client.leave_group_call(chat_id)
-        await message.reply("👋 غادرت المكالمة الصوتية.")
+        await pytgclient.leave_group_call(GROUP_ID)
+        print("Bot left the voice chat successfully!")
     except Exception as e:
-        await message.reply(f"❌ خطأ أثناء المغادرة: {e}")
+        print(f"Error leaving voice chat: {e}")
 
-# تشغيل العملاء
+# ======================
+# أوامر تحكم بسيطة عبر الرسائل
+# ======================
+@app.on_message()
+async def handle_message(client, message: Message):
+    text = message.text.lower()
+    if "صعد" in text:  # مثال، يمكن تغييره
+        await join_voice_chat()
+    elif "نزل" in text:
+        await leave_voice_chat()
+
+# ======================
+# بدء البوت
+# ======================
 async def main():
     await app.start()
-    await pytgcalls_client.start()
-    print("✅ البوت يعمل الآن وينتظر الأوامر...")
-    await idle()
-    await app.stop()
+    print("Userbot started!")
+    await pytgclient.start()
+    print("PyTgCalls client started!")
+    await asyncio.Future()  # يبقي البرنامج يعمل
 
 if __name__ == "__main__":
-    import asyncio
     asyncio.run(main())
-
