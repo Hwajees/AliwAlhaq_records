@@ -1,56 +1,45 @@
-import sys
 import os
-import asyncio
-from pyrogram import Client, filters
-from pyrogram.types import Message
+from pyrogram import Client
+from pytgcalls.pytgcalls.pytgcalls import PyTgCalls  # ✅ المسار الصحيح الآن
+from pytgcalls import idle
 
-# أضف مجلد libs إلى مسار Python ليتم التعرف على الحزم المحلية
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "libs"))
+API_ID = int(os.environ.get("API_ID"))
+API_HASH = os.environ.get("API_HASH")
+SESSION_STRING = os.environ.get("SESSION_STRING")
+GROUP_ID = int(os.environ.get("GROUP_ID"))
 
-# استيراد الحزم بعد إضافة المسار
-from pytgcalls import PyTgCalls
-from tgcalls import SomeModule  # عدّل حسب الحاجة
+# إنشاء عميل Pyrogram (جلسة يوزربوت)
+app = Client("userbot", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING)
 
-# -------------------------
-# متغيرات البيئة
-API_ID = int(os.environ.get("API_ID", 123456))  # ضع API_ID الخاص بك
-API_HASH = os.environ.get("API_HASH", "your_api_hash")
-SESSION_STRING = os.environ.get("SESSION_STRING", "your_session_string")
-GROUP_ID = int(os.environ.get("GROUP_ID", -1001234567890))  # معرف القروب
+# تهيئة PyTgCalls مع الجلسة
+pytgcalls_client = PyTgCalls(app)
 
-# -------------------------
-# إعدادات Pyrogram
-app = Client(
-    "userbot",
-    api_id=API_ID,
-    api_hash=API_HASH,
-    session_string=SESSION_STRING
-)
-
-# إعداد PyTgCalls
-pytgcalls = PyTgCalls(app)
-
-# -------------------------
-# أوامر البوت
-
-@app.on_message(filters.command("joinvc") & filters.user(filters.me))
-async def join_voice(_, message: Message):
+@app.on_message(filters.command("join", prefixes=["/", "!"]))
+async def join_call(_, message):
+    chat_id = GROUP_ID
     try:
-        await pytgcalls.join_group_call(GROUP_ID, "silence.mp3")
-        await message.reply_text("تم الانضمام إلى المحادثة الصوتية ✅")
+        await pytgcalls_client.join_group_call(chat_id, "silence.mp3")
+        await message.reply("✅ انضممت إلى المكالمة الصوتية.")
     except Exception as e:
-        await message.reply_text(f"حدث خطأ: {e}")
+        await message.reply(f"❌ خطأ أثناء الانضمام: {e}")
 
-@app.on_message(filters.command("leavevc") & filters.user(filters.me))
-async def leave_voice(_, message: Message):
+@app.on_message(filters.command("leave", prefixes=["/", "!"]))
+async def leave_call(_, message):
+    chat_id = GROUP_ID
     try:
-        await pytgcalls.leave_group_call(GROUP_ID)
-        await message.reply_text("تم الخروج من المحادثة الصوتية ✅")
+        await pytgcalls_client.leave_group_call(chat_id)
+        await message.reply("👋 غادرت المكالمة الصوتية.")
     except Exception as e:
-        await message.reply_text(f"حدث خطأ: {e}")
+        await message.reply(f"❌ خطأ أثناء المغادرة: {e}")
 
-# -------------------------
-# تشغيل البوت
-print("🚀 Starting userbot...")
-app.run()
+# تشغيل العملاء
+async def main():
+    await app.start()
+    await pytgcalls_client.start()
+    print("✅ البوت يعمل الآن وينتظر الأوامر...")
+    await idle()
+    await app.stop()
 
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(main())
