@@ -11,7 +11,7 @@ API_ID = int(os.environ.get("API_ID"))
 API_HASH = os.environ.get("API_HASH")
 SESSION_STRING = os.environ.get("SESSION_STRING")
 GROUP_ID = int(os.environ.get("GROUP_ID"))
-USERNAME = os.environ.get("USERNAME")  # اسم المستخدم للـ userbot بدون @
+USERNAME = os.environ.get("USERNAME")  # بدون @
 
 app = Client(
     "userbot",
@@ -21,7 +21,7 @@ app = Client(
 )
 
 # -----------------------------
-# دالة التحقق من المشرف
+# التحقق من المشرف
 # -----------------------------
 async def is_user_admin(chat_id, user_id):
     try:
@@ -34,7 +34,7 @@ async def is_user_admin(chat_id, user_id):
         return False
 
 # -----------------------------
-# استقبال أي رسالة صوتية أو voice من المشرف
+# استقبال الصوتيات من المشرف
 # -----------------------------
 @app.on_message(filters.chat(GROUP_ID) & (filters.audio | filters.voice))
 async def handle_audio(client, message):
@@ -46,31 +46,22 @@ async def handle_audio(client, message):
         return
 
     private_url = f"https://t.me/{USERNAME}?start=archive_{message.from_user.id}"
-
-    caption = (
-        f"تم استلام المقطع الصوتي ✅<br>"
-        f'<a href="{private_url}">اضغط هنا للمحادثة الخاصة مع البوت</a>'
-    )
+    caption = f"تم استلام المقطع الصوتي ✅\nاضغط هنا للمحادثة الخاصة مع البوت: {private_url}"
 
     await message.reply_text(
         caption,
-        disable_web_page_preview=True,
-        parse_mode="html"
+        disable_web_page_preview=True
     )
 
 # -----------------------------
-# اختبار وصول الرسائل للخاص
+# التعامل مع الخاص
 # -----------------------------
 @app.on_message(filters.private & filters.command("start"))
 async def handle_private(client, message):
     if len(message.command) > 1 and message.command[1].startswith("archive_"):
-        await message.reply_text(
-            "🎧 لقد دخلت للخاص! هنا يمكنك متابعة الأرشفة لاحقًا."
-        )
+        await message.reply_text("🎧 لقد دخلت للخاص! هنا يمكنك متابعة الأرشفة لاحقًا.")
     else:
-        await message.reply_text(
-            "👋 أهلاً! استخدم الرابط من المجموعة لبدء الأرشفة."
-        )
+        await message.reply_text("👋 أهلاً! استخدم الرابط من المجموعة لبدء الأرشفة.")
 
 # -----------------------------
 # Flask لإبقاء Render مستيقظ
