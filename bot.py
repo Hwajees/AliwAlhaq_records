@@ -1,46 +1,73 @@
+import os
+from datetime import datetime
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Message
-import asyncio
+from pyrogram.enums import ChatMembersFilter
+from flask import Flask
+import threading
+import math
 
-# متغيرات البيئة (سيتم وضعها في Render)
-import os
-
-SESSION_STRING = os.getenv("SESSION_STRING")
-GROUP_ID = int(os.getenv("GROUP_ID"))
-CHANNEL_ID = int(os.getenv("CHANNEL_ID"))
+# -----------------------------
+# إعدادات Userbot
+# -----------------------------
+SESSION_STRING = os.environ.get("SESSION_STRING")
+GROUP_ID = int(os.environ.get("GROUP_ID"))
+CHANNEL_ID = int(os.environ.get("CHANNEL_ID"))
 
 app = Client("archiver_userbot", session_string=SESSION_STRING)
 
-# قاموس مؤقت لتخزين البيانات أثناء المحادثة الخاصة
+# -----------------------------
+# قاموس مؤقت لتخزين بيانات المقطع لكل مشرف
+# -----------------------------
 pending_audio = {}
 
+# -----------------------------
+# دوال مساعدة
+# -----------------------------
+def sanitize_filename(name):
+    return "".join(c if c.isalnum() else "_" for c in name)
+
+async def is_user_admin(chat_id, user_id):
+    try:
+        async for member in app.get_chat_members(chat_id, filter=ChatMembersFilter.ADMINISTRATORS):
+            if member.user.id == user_id:
+                return True
+        return False
+    except Exception as e:
+        print("Error checking admin:", e)
+        return False
+
+# -----------------------------
 # رصد الرسائل الصوتية في المجموعة
+# -----------------------------
 @app.on_message(filters.chat(GROUP_ID) & (filters.audio | filters.voice))
 async def handle_audio(client: Client, message: Message):
     user = message.from_user
-
-    # تحقق من أن المرسل مشرف
-    member = await client.get_chat_member(GROUP_ID, user.id)
-    if member.status not in ["administrator", "creator"]:
+    is_admin = await is_user_admin(message.chat.id, user.id)
+    if not is_admin:
         return  # تجاهل غير المشرفين
 
     # حفظ الرسالة مؤقتًا
-    pending_audio[user.id] = {
+    file_info = {
         "message": message,
         "title": message.audio.title if message.audio else None,
         "duration": message.audio.duration if message.audio else message.voice.duration,
+        "state": "ask_title"
     }
+    pending_audio[user.id] = file_info
 
-    # زر لإرسال المحادثة الخاصة للمشرف
+    # زر للمحادثة الخاصة
     keyboard = InlineKeyboardMarkup(
         [[InlineKeyboardButton("📩 افتح المحادثة الخاصة", url=f"https://t.me/{user.username}?start=archive")]]
     )
     await message.reply_text(
-        "تم استلام المقطع الصوتي ✅\nاضغط الزر للمتابعة في المحادثة الخاصة.", 
+        "تم استلام المقطع الصوتي ✅\nاضغط الزر للمتابعة في المحادثة الخاصة.",
         reply_markup=keyboard
     )
 
-# رصد الرسائل الخاصة للمشرف بعد الضغط على الزر
+# -----------------------------
+# التفاعل في المحادثة الخاصة لجمع العنوان والمتحدث
+# -----------------------------
 @app.on_message(filters.private & filters.user(list(pending_audio.keys())))
 async def private_interaction(client: Client, message: Message):
     user_id = message.from_user.id
@@ -50,6 +77,7 @@ async def private_interaction(client: Client, message: Message):
     audio_info = pending_audio[user_id]
     state = audio_info.get("state", "ask_title")
 
+    # السؤال عن العنوان
     if state == "ask_title":
         await message.reply_text("📌 اكتب العنوان الجديد للمقطع الصوتي أو اكتب 'تخطي' للاحتفاظ بالعنوان الحالي.")
         audio_info["state"] = "waiting_title"
@@ -62,40 +90,64 @@ async def private_interaction(client: Client, message: Message):
         await message.reply_text("🗣️ اكتب اسم المتحدث الرئيسي في المقطع الصوتي:")
         return
 
+    # السؤال عن اسم المتحدث
     if state == "ask_speaker":
         audio_info["speaker"] = message.text
-        # رفع المقطع للقناة بعد جمع البيانات
         msg = audio_info["message"]
-        title = audio_info["title"] or "بدون عنوان"
-        speaker = audio_info["speaker"]
-        duration_min = audio_info["duration"] // 60
+        title = audio_info.get("title") or "بدون عنوان"
+        speaker = audio_info.get("speaker")
+        duration_sec = audio_info.get("duration") or 0
+        duration_min = duration_sec // 60
+        duration_sec_rem = duration_sec % 60
         group_name = (await client.get_chat(GROUP_ID)).title
-
         caption = f"""🎵 عنوان المقطع: {title}
 🗣️ المتحدث: {speaker}
-📅 التاريخ: الآن
-⏱️ المدة: {duration_min} دقيقة
+📅 التاريخ: {datetime.now().strftime('%Y-%m-%d %H:%M')}
+⏱️ المدة: {duration_min} دقيقة و {duration_sec_rem} ثانية
 👥 المجموعة: {group_name}"""
 
         # رفع الصوت للقناة
-        if msg.audio:
-            await client.send_audio(CHANNEL_ID, audio=msg.audio.file_id, caption=caption)
-        else:
-            await client.send_voice(CHANNEL_ID, voice=msg.voice.file_id, caption=caption)
-
-        # حذف الرسالة من المجموعة
         try:
-            await msg.delete()
-        except:
-            pass
+            if msg.audio:
+                await client.send_audio(CHANNEL_ID, audio=msg.audio.file_id, caption=caption)
+            else:
+                await client.send_voice(CHANNEL_ID, voice=msg.voice.file_id, caption=caption)
+            # حذف الرسالة من المجموعة
+            try:
+                await msg.delete()
+            except:
+                pass
+            await message.reply_text("✅ تم أرشفة المقطع وحذفه من المجموعة.")
+        except Exception as e:
+            await message.reply_text(f"❌ حدث خطأ أثناء رفع المقطع: {e}")
 
-        await message.reply_text("✅ تم أرشفة المقطع وحذفه من المجموعة.")
         # إزالة من القاموس المؤقت
         pending_audio.pop(user_id)
 
+# -----------------------------
+# رسالة /start في المحادثة الخاصة
+# -----------------------------
 @app.on_message(filters.command("start") & filters.private)
 async def start_msg(client: Client, message: Message):
-    await message.reply_text("مرحبًا! هذا البوت مسؤول عن أرشفة المقاطع الصوتية للمجموعة.")
+    await message.reply_text("مرحبًا! هذا Userbot مسؤول عن أرشفة المقاطع الصوتية للمجموعة.")
 
-print("Userbot جاهز للعمل")
-app.run()
+# -----------------------------
+# Flask للحفاظ على الخدمة نشطة على Render
+# -----------------------------
+flask_app = Flask(__name__)
+
+@flask_app.route("/")
+def home():
+    return "Userbot is running!"
+
+def run_flask():
+    port = int(os.environ.get("PORT", 10000))  # Render يرسل هذا المتغير
+    flask_app.run(host="0.0.0.0", port=port)
+
+# -----------------------------
+# تشغيل Userbot + Flask
+# -----------------------------
+if __name__ == "__main__":
+    print("🚀 Starting userbot...")
+    threading.Thread(target=run_flask).start()
+    app.run()
