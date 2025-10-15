@@ -1,6 +1,11 @@
 import os
+import sys
+
+# أضف مجلد libs إلى sys.path حتى يمكن استيراد المكتبات منه
+sys.path.append(os.path.join(os.path.dirname(__file__), "libs"))
+
 from pyrogram import Client
-from libs.pytgcalls.pytgcalls import PyTgCalls  # المسار الجديد للمكتبة المحلية
+from pytgcalls.pytgcalls import PyTgCalls  # الآن الاستيراد سيعمل
 
 # جلب المتغيرات من بيئة Render
 API_ID = int(os.environ.get("API_ID"))
