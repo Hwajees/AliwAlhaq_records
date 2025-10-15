@@ -1,21 +1,24 @@
 import os
-from datetime import datetime
 from pyrogram import Client, filters
 from pyrogram.enums import ChatMembersFilter
 from flask import Flask
 import threading
 
 # -----------------------------
-# إعدادات اليوزربوت
+# إعدادات Userbot
 # -----------------------------
 API_ID = int(os.environ.get("API_ID"))
 API_HASH = os.environ.get("API_HASH")
 SESSION_STRING = os.environ.get("SESSION_STRING")
 GROUP_ID = int(os.environ.get("GROUP_ID"))
-CHANNEL_ID = int(os.environ.get("CHANNEL_ID"))
-USERNAME = os.environ.get("USERNAME")  # اسم المستخدم بدون @ مثلاً: AliwAlhaqUserbot
+USERNAME = os.environ.get("USERNAME")  # اسم المستخدم بدون @
 
-app = Client("userbot", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING)
+app = Client(
+    "userbot",
+    api_id=API_ID,
+    api_hash=API_HASH,
+    session_string=SESSION_STRING
+)
 
 # -----------------------------
 # دالة التحقق من المشرف
@@ -30,21 +33,20 @@ async def is_user_admin(chat_id, user_id):
         print("Error checking admin:", e)
         return False
 
-
 # -----------------------------
-# استقبال المقاطع الصوتية في المجموعة
+# استقبال أي رسالة صوتية أو voice من المشرف
 # -----------------------------
-@app.on_message(filters.group & filters.audio | filters.voice)
+@app.on_message(filters.chat(GROUP_ID) & (filters.audio | filters.voice))
 async def handle_audio(client, message):
-    if message.chat.id != GROUP_ID:
+    user = message.from_user
+    if not user:
         return
 
-    user_id = message.from_user.id
-    if not await is_user_admin(GROUP_ID, user_id):
+    if not await is_user_admin(GROUP_ID, user.id):
         return
 
-    # إنشاء رابط خاص للمتابعة
-    private_url = f"https://t.me/{USERNAME}?start=archive_{message.audio.file_unique_id if message.audio else message.voice.file_unique_id}"
+    # رابط النصي للخاص
+    private_url = f"https://t.me/{USERNAME}?start=archive_{message.from_user.id}"
 
     caption = (
         "تم استلام المقطع الصوتي ✅\n"
@@ -57,20 +59,18 @@ async def handle_audio(client, message):
         parse_mode="markdown"
     )
 
-
 # -----------------------------
-# معالجة الأوامر في الخاص
+# اختبار الوصول للخاص
 # -----------------------------
 @app.on_message(filters.private & filters.command("start"))
-async def start_command(client, message):
+async def handle_private(client, message):
     if len(message.command) > 1 and message.command[1].startswith("archive_"):
-        await message.reply("🎧 تم استقبال طلب الأرشفة! أرسل لي الآن:\n\n1️⃣ عنوان المقطع\n2️⃣ اسم المتحدث الرئيسي")
+        await message.reply_text("🎧 لقد دخلت للخاص! هنا يمكنك متابعة الأرشفة لاحقًا.")
     else:
-        await message.reply("👋 أهلًا! أرسل /start archive من المجموعة بعد رفع مقطع صوتي.")
-
+        await message.reply_text("👋 أهلاً! استخدم الرابط من المجموعة لبدء الأرشفة.")
 
 # -----------------------------
-# Flask لإبقاء Render مستيقظًا
+# Flask لإبقاء Render مستيقظ
 # -----------------------------
 flask_app = Flask(__name__)
 
@@ -82,7 +82,9 @@ def run_flask():
     port = int(os.environ.get("PORT", 10000))
     flask_app.run(host="0.0.0.0", port=port)
 
+# -----------------------------
+# تشغيل اليوزربوت + Flask
+# -----------------------------
 if __name__ == "__main__":
-    print("🚀 Starting userbot...")
     threading.Thread(target=run_flask).start()
     app.run()
