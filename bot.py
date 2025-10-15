@@ -1,5 +1,5 @@
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from pyrogram import Client, filters
 from pyrogram.enums import ChatMembersFilter
 from flask import Flask
@@ -42,11 +42,19 @@ async def is_user_admin(chat_id, user_id):
 user_states = {}
 
 # -----------------------------
+# الكلمات المسموح بها لأرشفة التسجيل
+# -----------------------------
+ALLOWED_COMMANDS = [
+    "أرشف التسجيل", "ارشف التسجيل", "أرشيف", "ارشيف",
+    "أحفظ التسجيل", "احفظ التسجيل", "الأرشيف", "الارشيف"
+]
+
+# -----------------------------
 # استقبال أمر أرشف التسجيل في المجموعة
 # -----------------------------
 @app.on_message(filters.chat(GROUP_ID) & filters.text)
 async def handle_archive_command(client, message):
-    if message.text.strip() != "أرشف التسجيل":
+    if message.text.strip() not in ALLOWED_COMMANDS:
         return
 
     user = message.from_user
@@ -107,15 +115,15 @@ async def archive_to_channel(user_id, message):
     speaker = state['speaker']
     date = datetime.now().strftime('%Y-%m-%d %H:%M')
 
-    # حساب مدة المقطع
+    # حساب مدة المقطع بصيغة hh:mm:ss
     try:
         audio = MutagenFile(file_path)
         duration_seconds = int(audio.info.length)
-        minutes = duration_seconds // 60
-        seconds = duration_seconds % 60
-        duration_text = f"{minutes} دقيقة و {seconds} ثانية"
+        duration_text = str(timedelta(seconds=duration_seconds))
+        if duration_seconds < 3600:
+            duration_text = "00:" + ":".join(duration_text.split(":")[-2:])
     except:
-        duration_text = "غير متوفر"
+        duration_text = "00:00:00"
 
     # الكابتشن مع فواصل بين الأسطر واسم المجموعة ثابت
     caption = (
