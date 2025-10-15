@@ -54,10 +54,10 @@ async def handle_audio(client, message):
     )
 
     await message.reply_text(
-        caption,
-        disable_web_page_preview=True,
-        parse_mode="markdown"
-    )
+    caption,
+    disable_web_page_preview=True,
+    parse_mode="markdown2"
+)
 
 # -----------------------------
 # اختبار الوصول للخاص
@@ -88,3 +88,4 @@ def run_flask():
 if __name__ == "__main__":
     threading.Thread(target=run_flask).start()
     app.run()
+
