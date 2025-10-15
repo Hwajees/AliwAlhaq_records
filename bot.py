@@ -1,6 +1,11 @@
 import os
+import sys
+
+# إضافة مجلد libs إلى مسار البحث
+sys.path.append(os.path.join(os.path.dirname(__file__), "libs"))
+
 from pyrogram import Client
-from pytgcalls.pytgcalls import PyTgCalls  # المسار بعد تعديل libs
+from pytgcalls.pytgcalls import PyTgCalls  # الآن سيجده Python
 
 # =========================
 # متغيرات البيئة
