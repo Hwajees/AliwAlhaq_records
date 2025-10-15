@@ -4,6 +4,8 @@ from pyrogram import Client, filters
 from pyrogram.enums import ChatMembersFilter
 from flask import Flask
 import threading
+from mutagen import File as MutagenFile  # لإستخراج مدة المقطع
+import math
 
 # -----------------------------
 # إعدادات Userbot
@@ -11,9 +13,10 @@ import threading
 API_ID = int(os.environ.get("API_ID"))
 API_HASH = os.environ.get("API_HASH")
 SESSION_STRING = os.environ.get("SESSION_STRING")
-GROUP_ID = int(os.environ.get("GROUP_ID"))            # رقم المجموعة
-CHANNEL_ID = os.environ.get("CHANNEL_ID")             # اسم المستخدم للقناة فقط (بدون @)
-USERNAME = os.environ.get("USERNAME")                # اسم المستخدم للـ userbot (بدون @)
+GROUP_ID = int(os.environ.get("GROUP_ID"))            
+CHANNEL_ID = os.environ.get("CHANNEL_ID")            
+USERNAME = os.environ.get("USERNAME")                
+GROUP_USERNAME = os.environ.get("GROUP_USERNAME")    # جديد: @AliwAlhaq
 
 app = Client(
     "userbot",
@@ -38,7 +41,7 @@ async def is_user_admin(chat_id, user_id):
 # -----------------------------
 # تخزين الحالة مؤقتًا لكل مستخدم
 # -----------------------------
-user_states = {}  # key: user_id, value: dict {'file': file_path, 'title': ..., 'speaker': ...}
+user_states = {}
 
 # -----------------------------
 # استقبال أمر أرشف التسجيل في المجموعة
@@ -55,14 +58,10 @@ async def handle_archive_command(client, message):
     if not await is_user_admin(GROUP_ID, user.id):
         return
 
-    # إنشاء رابط الخاص
     private_url = f"https://t.me/{USERNAME}?start=archive_{user.id}"
     caption = f"تم استلام طلب أرشفة المقطع ✅\nاضغط هنا للمحادثة الخاصة مع البوت: {private_url}"
 
-    await message.reply_text(
-        caption,
-        disable_web_page_preview=True
-    )
+    await message.reply_text(caption, disable_web_page_preview=True)
 
 # -----------------------------
 # استقبال الملفات الصوتية في الخاص
@@ -70,11 +69,8 @@ async def handle_archive_command(client, message):
 @app.on_message(filters.private & (filters.audio | filters.voice))
 async def receive_audio_private(client, message):
     user_id = message.from_user.id
-
-    # تحميل الملف مؤقتًا
     file_path = await message.download()
     user_states[user_id] = {'file': file_path}
-
     await message.reply_text("✅ تم استلام المقطع الصوتي الخاص بك.\nالآن أرسل عنوان المقطع:")
 
 # -----------------------------
@@ -83,27 +79,24 @@ async def receive_audio_private(client, message):
 @app.on_message(filters.private & filters.text)
 async def receive_text_private(client, message):
     user_id = message.from_user.id
-
     if user_id not in user_states:
         await message.reply_text("❌ لم يتم العثور على حالة المستخدم. أرسل الملف أولًا.")
         return
 
     state = user_states[user_id]
 
-    # استقبال العنوان
     if 'title' not in state:
         state['title'] = message.text.strip()
         await message.reply_text("حسنًا ✅، الآن أرسل اسم المتحدث الرئيسي:")
         return
 
-    # استقبال اسم المتحدث
     if 'speaker' not in state:
         state['speaker'] = message.text.strip()
         await archive_to_channel(user_id, message)
         return
 
 # -----------------------------
-# أرشفة المقطع للقناة
+# أرشفة المقطع للقناة مع مدة المقطع واسم المجموعة
 # -----------------------------
 async def archive_to_channel(user_id, message):
     state = user_states.get(user_id)
@@ -115,16 +108,29 @@ async def archive_to_channel(user_id, message):
     title = state['title']
     speaker = state['speaker']
     date = datetime.now().strftime('%Y-%m-%d %H:%M')
+
+    # حساب مدة المقطع
+    try:
+        audio = MutagenFile(file_path)
+        duration_seconds = int(audio.info.length)
+        minutes = duration_seconds // 60
+        seconds = duration_seconds % 60
+        duration_text = f"{minutes} دقيقة و {seconds} ثانية"
+    except:
+        duration_text = "غير متوفر"
+
+    # الكابتشن مع فواصل بين الأسطر
     caption = (
-        f"🎙 العنوان: {title}\n"
-        f"👤 المتحدث الرئيسي: {speaker}\n"
-        f"📅 التاريخ: {date}\n"
-        f"👥 المجموعة: @{GROUP_ID}"  # يظهر اسم المجموعة
+        f"🎙 العنوان: {title}\n\n"
+        f"👤 المتحدث الرئيسي: {speaker}\n\n"
+        f"⏱ مدة المقطع: {duration_text}\n\n"
+        f"📅 التاريخ: {date}\n\n"
+        f"👥 المجموعة: @{GROUP_USERNAME}"
     )
 
     try:
         await app.send_audio(
-            chat_id=f"@{CHANNEL_ID}",   # إرسال باستخدام اسم المستخدم للقناة
+            chat_id=f"@{CHANNEL_ID}",
             audio=file_path,
             caption=caption
         )
@@ -132,7 +138,6 @@ async def archive_to_channel(user_id, message):
     except Exception as e:
         await message.reply_text(f"❌ خطأ أثناء الأرشفة: {e}")
 
-    # حذف الملف المؤقت
     import os
     os.remove(file_path)
     user_states.pop(user_id, None)
@@ -150,9 +155,6 @@ def run_flask():
     port = int(os.environ.get("PORT", 10000))
     flask_app.run(host="0.0.0.0", port=port)
 
-# -----------------------------
-# تشغيل Userbot + Flask
-# -----------------------------
 if __name__ == "__main__":
     threading.Thread(target=run_flask).start()
     app.run()
