@@ -47,16 +47,15 @@ async def handle_audio(client, message):
 
     # رابط النصي للخاص
     private_url = f"https://t.me/{USERNAME}?start=archive_{message.from_user.id}"
-
-    caption = (
-        "تم استلام المقطع الصوتي ✅\n"
-        f"[اضغط هنا للمحادثة الخاصة مع البوت]({private_url})"
-    )
+caption = (
+    f"تم استلام المقطع الصوتي ✅<br>"
+    f'<a href="{private_url}">اضغط هنا للمحادثة الخاصة مع البوت</a>'
+)
 
     await message.reply_text(
     caption,
     disable_web_page_preview=True,
-    parse_mode="markdown2"
+    parse_mode="html"
 )
 
 # -----------------------------
@@ -88,4 +87,5 @@ def run_flask():
 if __name__ == "__main__":
     threading.Thread(target=run_flask).start()
     app.run()
+
 
