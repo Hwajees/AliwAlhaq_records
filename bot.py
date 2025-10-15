@@ -1,12 +1,13 @@
 import os
 import sys
 
-# ✅ أضف مجلد libs إلى sys.path ليتمكن Python من إيجاد المكتبات المحلية
+# ✅ أضف مجلد libs إلى sys.path
 sys.path.append(os.path.join(os.path.dirname(__file__), "libs"))
 
+# استيراد pytgcalls.py مباشرة من مجلد pytgcalls
+from pytgcalls.pytgcalls import PyTgCalls
+
 from pyrogram import Client
-from pytgcalls import pytgcalls  # هذا يستورد ملف pytgcalls.py مباشرة
-from pytgcalls.pytgcalls import PyTgCalls  # كلاس PyTgCalls داخل الملف
 
 # متغيرات البيئة
 API_ID = int(os.environ.get("API_ID"))
@@ -18,7 +19,7 @@ GROUP_ID = int(os.environ.get("GROUP_ID"))
 app = Client("userbot", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING)
 pytgcalls_instance = PyTgCalls(app)
 
-# دوال للصعود والخروج من المحادثة الصوتية
+# أوامر بسيطة للصعود والخروج من المحادثة الصوتية
 @app.on_message()
 async def handle_message(client, message):
     text = message.text.lower() if message.text else ""
