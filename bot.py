@@ -1,28 +1,36 @@
 import os
 from datetime import datetime
 from pyrogram import Client, filters
-from pyrogram.types import Message
 from pyrogram.enums import ChatMembersFilter
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from flask import Flask
 import threading
 
 # -----------------------------
-# إعدادات Userbot
+# إعدادات البوت
 # -----------------------------
+API_ID = int(os.environ.get("API_ID"))
+API_HASH = os.environ.get("API_HASH")
 SESSION_STRING = os.environ.get("SESSION_STRING")
 GROUP_ID = int(os.environ.get("GROUP_ID"))
 CHANNEL_ID = int(os.environ.get("CHANNEL_ID"))
+BOT_USERNAME = os.environ.get("BOT_USERNAME")  # أضفه في Render
 
-app = Client("archiver_userbot", session_string=SESSION_STRING)
+app = Client("userbot", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING)
 
 # -----------------------------
-# قاموس مؤقت لتخزين بيانات المقطع لكل مشرف
+# متغيرات تسجيل الصوت
 # -----------------------------
-pending_audio = {}
+is_recording = False
+current_title = ""
+current_file = ""
 
 # -----------------------------
 # دوال مساعدة
 # -----------------------------
+def sanitize_filename(name):
+    return "".join(c if c.isalnum() else "_" for c in name)
+
 async def is_user_admin(chat_id, user_id):
     try:
         async for member in app.get_chat_members(chat_id, filter=ChatMembersFilter.ADMINISTRATORS):
@@ -33,116 +41,78 @@ async def is_user_admin(chat_id, user_id):
         print("Error checking admin:", e)
         return False
 
+
 # -----------------------------
-# رصد الرسائل الصوتية في المجموعة
+# أوامر المجموعة
 # -----------------------------
-@app.on_message(filters.chat(GROUP_ID) & (filters.audio | filters.voice))
-async def handle_audio(client: Client, message: Message):
-    user = message.from_user
-    is_admin = await is_user_admin(message.chat.id, user.id)
+@app.on_message(filters.group & filters.audio)
+async def handle_audio_message(client, message):
+    """يتعامل مع المقاطع الصوتية المرسلة في المجموعة"""
+    if message.chat.id != GROUP_ID:
+        return
+
+    user_id = message.from_user.id
+    is_admin = await is_user_admin(message.chat.id, user_id)
     if not is_admin:
-        return  # تجاهل غير المشرفين
+        return
 
-    # حفظ الرسالة مؤقتًا
-    file_info = {
-        "message": message,
-        "title": message.audio.title if message.audio else None,
-        "duration": message.audio.duration if message.audio else message.voice.duration,
-        "state": "ask_title"
-    }
-    pending_audio[user.id] = file_info
-
-    # إرسال رابط المحادثة الخاصة مع البوت
-    bot_username = (await client.get_me()).username
     await message.reply_text(
-        f"تم استلام المقطع الصوتي ✅\n"
-        f"اضغط هنا للمحادثة الخاصة مع البوت:\nhttps://t.me/{bot_username}?start=archive"
+        "تم استلام المقطع الصوتي ✅\nاضغط الزر للمتابعة في المحادثة الخاصة.",
+        reply_markup=InlineKeyboardMarkup(
+            [
+                [
+                    InlineKeyboardButton(
+                        "📥 المتابعة في الخاص",
+                        url=f"https://t.me/{BOT_USERNAME}?start=archive"
+                    )
+                ]
+            ]
+        ),
     )
 
+
 # -----------------------------
-# التفاعل في المحادثة الخاصة لجمع العنوان والمتحدث
+# أوامر الخاص
 # -----------------------------
-@app.on_message(filters.private & filters.user(list(pending_audio.keys())))
-async def private_interaction(client: Client, message: Message):
-    user_id = message.from_user.id
-    if user_id not in pending_audio:
-        return
+@app.on_message(filters.private & filters.command("start"))
+async def start_private(client, message):
+    """يستقبل أمر الأرشفة في الخاص بعد الضغط على الزر"""
+    if len(message.command) > 1 and message.command[1] == "archive":
+        await message.reply_text("🎧 تم فتح جلسة الأرشفة.\nالرجاء الانتظار قليلاً...")
 
-    audio_info = pending_audio[user_id]
-    state = audio_info.get("state", "ask_title")
+        test_file = "test_audio.ogg"
+        if not os.path.exists(test_file):
+            await message.reply_text("❌ لم يتم العثور على المقطع الصوتي (test_audio.ogg).")
+            return
 
-    # السؤال عن العنوان
-    if state == "ask_title":
-        await message.reply_text("📌 اكتب العنوان الجديد للمقطع الصوتي أو اكتب 'تخطي' للاحتفاظ بالعنوان الحالي.")
-        audio_info["state"] = "waiting_title"
-        return
-
-    if state == "waiting_title":
-        if message.text.lower() != "تخطي":
-            audio_info["title"] = message.text
-        audio_info["state"] = "ask_speaker"
-        await message.reply_text("🗣️ اكتب اسم المتحدث الرئيسي في المقطع الصوتي:")
-        return
-
-    # السؤال عن اسم المتحدث
-    if state == "ask_speaker":
-        audio_info["speaker"] = message.text
-        msg = audio_info["message"]
-        title = audio_info.get("title") or "بدون عنوان"
-        speaker = audio_info.get("speaker")
-        duration_sec = audio_info.get("duration") or 0
-        duration_min = duration_sec // 60
-        duration_sec_rem = duration_sec % 60
-        group_name = (await client.get_chat(GROUP_ID)).title
-        caption = f"""🎵 عنوان المقطع: {title}
-🗣️ المتحدث: {speaker}
-📅 التاريخ: {datetime.now().strftime('%Y-%m-%d %H:%M')}
-⏱️ المدة: {duration_min} دقيقة و {duration_sec_rem} ثانية
-👥 المجموعة: {group_name}"""
-
-        # رفع الصوت للقناة
         try:
-            if msg.audio:
-                await client.send_audio(CHANNEL_ID, audio=msg.audio.file_id, caption=caption)
-            else:
-                await client.send_voice(CHANNEL_ID, voice=msg.voice.file_id, caption=caption)
-
-            # حذف الرسالة من المجموعة
-            try:
-                await msg.delete()
-            except:
-                pass
-
-            await message.reply_text("✅ تم أرشفة المقطع وحذفه من المجموعة.")
+            caption = (
+                f"🎙 التسجيل: {current_title or 'بدون عنوان'}\n"
+                f"📅 التاريخ: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n"
+                f"👤 المشرف: {message.from_user.first_name}\n"
+                f"👥 المجموعة: {GROUP_ID}"
+            )
+            await app.send_audio(CHANNEL_ID, audio=test_file, caption=caption)
+            await message.reply_text("✅ تم أرشفة التسجيل بنجاح وإرساله إلى القناة.")
         except Exception as e:
-            await message.reply_text(f"❌ حدث خطأ أثناء رفع المقطع: {e}")
+            await message.reply_text(f"❌ حدث خطأ أثناء إرسال المقطع:\n{e}")
+    else:
+        await message.reply_text("👋 مرحبًا! استخدم الزر من المجموعة لبدء الأرشفة.")
 
-        # إزالة من القاموس المؤقت
-        pending_audio.pop(user_id)
-
-# -----------------------------
-# رسالة /start في المحادثة الخاصة
-# -----------------------------
-@app.on_message(filters.command("start") & filters.private)
-async def start_msg(client: Client, message: Message):
-    await message.reply_text("مرحبًا! هذا Userbot مسؤول عن أرشفة المقاطع الصوتية للمجموعة.")
 
 # -----------------------------
-# Flask للحفاظ على الخدمة نشطة على Render
+# تشغيل Flask مع Pyrogram
 # -----------------------------
 flask_app = Flask(__name__)
 
 @flask_app.route("/")
 def home():
-    return "Userbot is running!"
+    return "Bot is running!"
 
 def run_flask():
     port = int(os.environ.get("PORT", 10000))  # Render يرسل هذا المتغير
     flask_app.run(host="0.0.0.0", port=port)
 
-# -----------------------------
-# تشغيل Userbot + Flask
-# -----------------------------
 if __name__ == "__main__":
     print("🚀 Starting userbot...")
     threading.Thread(target=run_flask).start()
