@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 from pyrogram import Client, filters
 from pyrogram.enums import ChatMembersFilter
 from flask import Flask
@@ -11,6 +12,7 @@ API_ID = int(os.environ.get("API_ID"))
 API_HASH = os.environ.get("API_HASH")
 SESSION_STRING = os.environ.get("SESSION_STRING")
 GROUP_ID = int(os.environ.get("GROUP_ID"))
+CHANNEL_ID = int(os.environ.get("CHANNEL_ID"))
 USERNAME = os.environ.get("USERNAME")  # بدون @
 
 app = Client(
@@ -34,10 +36,15 @@ async def is_user_admin(chat_id, user_id):
         return False
 
 # -----------------------------
-# استقبال الصوتيات من المشرف
+# تخزين الحالة مؤقتًا لكل مستخدم
+# -----------------------------
+user_states = {}  # key: user_id, value: dict {'file': file_path, 'title': ..., 'speaker': ...}
+
+# -----------------------------
+# استقبال الصوتيات من المشرف في المجموعة
 # -----------------------------
 @app.on_message(filters.chat(GROUP_ID) & (filters.audio | filters.voice))
-async def handle_audio(client, message):
+async def handle_audio_group(client, message):
     user = message.from_user
     if not user:
         return
@@ -45,7 +52,8 @@ async def handle_audio(client, message):
     if not await is_user_admin(GROUP_ID, user.id):
         return
 
-    private_url = f"https://t.me/{USERNAME}?start=archive_{message.from_user.id}"
+    # إنشاء رابط الخاص
+    private_url = f"https://t.me/{USERNAME}?start=archive_{user.id}"
     caption = f"تم استلام المقطع الصوتي ✅\nاضغط هنا للمحادثة الخاصة مع البوت: {private_url}"
 
     await message.reply_text(
@@ -54,14 +62,77 @@ async def handle_audio(client, message):
     )
 
 # -----------------------------
-# التعامل مع الخاص
+# استقبال الملفات الصوتية في الخاص
 # -----------------------------
-@app.on_message(filters.private & filters.command("start"))
-async def handle_private(client, message):
-    if len(message.command) > 1 and message.command[1].startswith("archive_"):
-        await message.reply_text("🎧 لقد دخلت للخاص! هنا يمكنك متابعة الأرشفة لاحقًا.")
-    else:
-        await message.reply_text("👋 أهلاً! استخدم الرابط من المجموعة لبدء الأرشفة.")
+@app.on_message(filters.private & (filters.audio | filters.voice))
+async def receive_audio_private(client, message):
+    user_id = message.from_user.id
+
+    # تحميل الملف مؤقتًا
+    file_path = await message.download()
+    user_states[user_id] = {'file': file_path}
+
+    await message.reply_text("✅ تم استلام المقطع الصوتي الخاص بك.\nالآن أرسل عنوان المقطع:")
+
+# -----------------------------
+# استقبال العنوان واسم المتحدث
+# -----------------------------
+@app.on_message(filters.private & filters.text)
+async def receive_text_private(client, message):
+    user_id = message.from_user.id
+
+    if user_id not in user_states:
+        await message.reply_text("❌ لم يتم العثور على حالة المستخدم. أرسل الملف أولًا.")
+        return
+
+    state = user_states[user_id]
+
+    # استقبال العنوان
+    if 'title' not in state:
+        state['title'] = message.text.strip()
+        await message.reply_text("حسنًا ✅، الآن أرسل اسم المتحدث الرئيسي:")
+        return
+
+    # استقبال اسم المتحدث
+    if 'speaker' not in state:
+        state['speaker'] = message.text.strip()
+        await archive_to_channel(user_id, message)
+        return
+
+# -----------------------------
+# أرشفة المقطع للقناة
+# -----------------------------
+async def archive_to_channel(user_id, message):
+    state = user_states.get(user_id)
+    if not state:
+        await message.reply_text("❌ حدث خطأ: لم يتم العثور على حالة المستخدم.")
+        return
+
+    file_path = state['file']
+    title = state['title']
+    speaker = state['speaker']
+    date = datetime.now().strftime('%Y-%m-%d %H:%M')
+    caption = (
+        f"🎙 العنوان: {title}\n"
+        f"👤 المتحدث الرئيسي: {speaker}\n"
+        f"📅 التاريخ: {date}\n"
+        f"👥 المجموعة: {GROUP_ID}"
+    )
+
+    try:
+        await app.send_audio(
+            chat_id=CHANNEL_ID,
+            audio=file_path,
+            caption=caption
+        )
+        await message.reply_text("✅ تم أرشفة المقطع بنجاح في القناة.")
+    except Exception as e:
+        await message.reply_text(f"❌ خطأ أثناء الأرشفة: {e}")
+
+    # حذف الملف المؤقت
+    import os
+    os.remove(file_path)
+    user_states.pop(user_id, None)
 
 # -----------------------------
 # Flask لإبقاء Render مستيقظ
