@@ -1,11 +1,10 @@
 import os
 from datetime import datetime
 from pyrogram import Client, filters
-from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Message
+from pyrogram.types import Message
 from pyrogram.enums import ChatMembersFilter
 from flask import Flask
 import threading
-import math
 
 # -----------------------------
 # إعدادات Userbot
@@ -24,9 +23,6 @@ pending_audio = {}
 # -----------------------------
 # دوال مساعدة
 # -----------------------------
-def sanitize_filename(name):
-    return "".join(c if c.isalnum() else "_" for c in name)
-
 async def is_user_admin(chat_id, user_id):
     try:
         async for member in app.get_chat_members(chat_id, filter=ChatMembersFilter.ADMINISTRATORS):
@@ -56,12 +52,12 @@ async def handle_audio(client: Client, message: Message):
     }
     pending_audio[user.id] = file_info
 
-    # زر للمحادثة الخاصة
+    # إرسال رابط المحادثة الخاصة مع البوت
     bot_username = (await client.get_me()).username
-await message.reply_text(
-    f"تم استلام المقطع الصوتي ✅\n"
-    f"اضغط هنا للمحادثة الخاصة مع البوت: https://t.me/{bot_username}?start=archive"
-)
+    await message.reply_text(
+        f"تم استلام المقطع الصوتي ✅\n"
+        f"اضغط هنا للمحادثة الخاصة مع البوت:\nhttps://t.me/{bot_username}?start=archive"
+    )
 
 # -----------------------------
 # التفاعل في المحادثة الخاصة لجمع العنوان والمتحدث
@@ -110,11 +106,13 @@ async def private_interaction(client: Client, message: Message):
                 await client.send_audio(CHANNEL_ID, audio=msg.audio.file_id, caption=caption)
             else:
                 await client.send_voice(CHANNEL_ID, voice=msg.voice.file_id, caption=caption)
+
             # حذف الرسالة من المجموعة
             try:
                 await msg.delete()
             except:
                 pass
+
             await message.reply_text("✅ تم أرشفة المقطع وحذفه من المجموعة.")
         except Exception as e:
             await message.reply_text(f"❌ حدث خطأ أثناء رفع المقطع: {e}")
@@ -149,4 +147,3 @@ if __name__ == "__main__":
     print("🚀 Starting userbot...")
     threading.Thread(target=run_flask).start()
     app.run()
-
