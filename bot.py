@@ -15,13 +15,9 @@ API_HASH = os.environ.get("API_HASH")
 SESSION_STRING = os.environ.get("SESSION_STRING")
 GROUP_ID = int(os.environ.get("GROUP_ID"))
 CHANNEL_ID = int(os.environ.get("CHANNEL_ID"))
-BOT_USERNAME = os.environ.get("BOT_USERNAME")  # بدون @
 
 app = Client("userbot", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING)
 
-# ==========================
-# متغيرات لحفظ آخر ملف وصوت
-# ==========================
 pending_archives = {}
 
 # ==========================
@@ -49,14 +45,17 @@ async def handle_voice(client, message):
     if not await is_admin(GROUP_ID, user.id):
         return
 
-    # حفظ الملف مؤقتًا
+    # تحميل الصوت مؤقتاً
     file_path = await message.download()
     pending_archives[user.id] = {
         "file": file_path,
         "title": getattr(message.audio, "title", "تسجيل بدون عنوان"),
     }
 
-    # إرسال زر الانتقال للخاص
+    me = await client.get_me()  # نستخدمها كما كانت تعمل سابقاً
+    username = me.username or "userbot"
+
+    # ✅ الزر الذي نجح سابقاً
     await message.reply_text(
         "تم استلام المقطع الصوتي ✅\nاضغط الزر للمتابعة في المحادثة الخاصة.",
         reply_markup=InlineKeyboardMarkup(
@@ -64,7 +63,7 @@ async def handle_voice(client, message):
                 [
                     InlineKeyboardButton(
                         "📥 المتابعة في الخاص",
-                        url=f"https://t.me/{BOT_USERNAME}?start=archive_{user.id}"
+                        url=f"https://t.me/{username}?start=archive_{user.id}"
                     )
                 ]
             ]
@@ -73,7 +72,7 @@ async def handle_voice(client, message):
 
 
 # ==========================
-# عند الدخول للخاص وبدء الأرشفة
+# عند بدء الأرشفة في الخاص
 # ==========================
 @app.on_message(filters.private & filters.command("start"))
 async def handle_private(client, message):
@@ -100,6 +99,7 @@ async def handle_private(client, message):
             f"🎙 العنوان: {title}\n"
             f"👤 المشرف: {user.first_name}\n"
             f"📅 التاريخ: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n"
+            f"👥 المجموعة: {message.chat.id}"
         )
 
         try:
@@ -108,7 +108,7 @@ async def handle_private(client, message):
         except Exception as e:
             await message.reply_text(f"❌ حدث خطأ أثناء الأرشفة:\n{e}")
     else:
-        await message.reply_text("👋 أهلاً بك! أرسل التسجيل من المجموعة واستخدم الزر للبدء بالأرشفة.")
+        await message.reply_text("👋 أرسل التسجيل في المجموعة واضغط الزر للمتابعة هنا.")
 
 
 # ==========================
@@ -118,7 +118,7 @@ flask_app = Flask(__name__)
 
 @flask_app.route("/")
 def home():
-    return "Userbot is running."
+    return "Userbot is running fine ✅"
 
 def run_flask():
     port = int(os.environ.get("PORT", 10000))
