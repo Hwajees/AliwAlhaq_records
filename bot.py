@@ -5,7 +5,7 @@ import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), "libs"))
 
 from pyrogram import Client
-from pytgcalls import pytgcalls  # استيراد pytgcalls.py من مجلد pytgcalls
+from pytgcalls.pytgcalls import PyTgCalls  # الاستيراد المباشر من الملف pytgcalls.py
 
 # المتغيرات من بيئة Render
 API_ID = int(os.environ.get("API_ID"))
@@ -15,7 +15,7 @@ GROUP_ID = int(os.environ.get("GROUP_ID"))
 
 # تهيئة البوت
 app = Client("userbot", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING)
-pytgcalls_instance = pytgcalls.PyTgCalls(app)
+pytgcalls_instance = PyTgCalls(app)
 
 # دوال بسيطة للصعود والخروج من المحادثة الصوتية
 @app.on_message()
