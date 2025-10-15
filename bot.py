@@ -11,7 +11,7 @@ API_ID = int(os.environ.get("API_ID"))
 API_HASH = os.environ.get("API_HASH")
 SESSION_STRING = os.environ.get("SESSION_STRING")
 GROUP_ID = int(os.environ.get("GROUP_ID"))
-USERNAME = os.environ.get("USERNAME")  # اسم المستخدم بدون @
+USERNAME = os.environ.get("USERNAME")  # اسم المستخدم للـ userbot بدون @
 
 app = Client(
     "userbot",
@@ -45,28 +45,32 @@ async def handle_audio(client, message):
     if not await is_user_admin(GROUP_ID, user.id):
         return
 
-    # رابط النصي للخاص
     private_url = f"https://t.me/{USERNAME}?start=archive_{message.from_user.id}"
-caption = (
-    f"تم استلام المقطع الصوتي ✅<br>"
-    f'<a href="{private_url}">اضغط هنا للمحادثة الخاصة مع البوت</a>'
-)
+
+    caption = (
+        f"تم استلام المقطع الصوتي ✅<br>"
+        f'<a href="{private_url}">اضغط هنا للمحادثة الخاصة مع البوت</a>'
+    )
 
     await message.reply_text(
-    caption,
-    disable_web_page_preview=True,
-    parse_mode="html"
-)
+        caption,
+        disable_web_page_preview=True,
+        parse_mode="html"
+    )
 
 # -----------------------------
-# اختبار الوصول للخاص
+# اختبار وصول الرسائل للخاص
 # -----------------------------
 @app.on_message(filters.private & filters.command("start"))
 async def handle_private(client, message):
     if len(message.command) > 1 and message.command[1].startswith("archive_"):
-        await message.reply_text("🎧 لقد دخلت للخاص! هنا يمكنك متابعة الأرشفة لاحقًا.")
+        await message.reply_text(
+            "🎧 لقد دخلت للخاص! هنا يمكنك متابعة الأرشفة لاحقًا."
+        )
     else:
-        await message.reply_text("👋 أهلاً! استخدم الرابط من المجموعة لبدء الأرشفة.")
+        await message.reply_text(
+            "👋 أهلاً! استخدم الرابط من المجموعة لبدء الأرشفة."
+        )
 
 # -----------------------------
 # Flask لإبقاء Render مستيقظ
@@ -82,10 +86,8 @@ def run_flask():
     flask_app.run(host="0.0.0.0", port=port)
 
 # -----------------------------
-# تشغيل اليوزربوت + Flask
+# تشغيل Userbot + Flask
 # -----------------------------
 if __name__ == "__main__":
     threading.Thread(target=run_flask).start()
     app.run()
-
-
