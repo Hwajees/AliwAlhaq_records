@@ -11,7 +11,7 @@ API_ID = int(os.environ.get("API_ID"))
 API_HASH = os.environ.get("API_HASH")
 SESSION_STRING = os.environ.get("SESSION_STRING")
 GROUP_ID = int(os.environ.get("GROUP_ID"))
-CHANNEL_ID = os.environ.get("CHANNEL_ID"))  # إذا لاحقًا تحتاجه
+CHANNEL_ID = os.environ.get("CHANNEL_ID")  # إذا لاحقًا تحتاجه
 
 # ======================
 # إنشاء اليوزبوت
@@ -71,3 +71,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
