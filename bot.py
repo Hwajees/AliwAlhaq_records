@@ -5,7 +5,7 @@ from pyrogram import Client, filters
 # ✅ نضيف مجلد libs لمسار البحث
 sys.path.append(os.path.join(os.path.dirname(__file__), "libs"))
 
-from pytgcalls.pytgcalls.pytgcalls import PyTgCalls  # الآن سيجده بشكل صحيح
+from pytgcalls.pytgcalls import PyTgCalls  # الآن سيجده بشكل صحيح
 from pytgcalls import idle
 
 # المتغيرات من بيئة Render
@@ -49,3 +49,4 @@ async def main():
 if __name__ == "__main__":
     import asyncio
     asyncio.run(main())
+
