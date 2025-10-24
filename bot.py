@@ -153,7 +153,9 @@ def run_userbot():
         async with app_client:
             logger.info("🚀 Userbot connected and now polling messages...")
             await asyncio.get_event_loop().create_future()
-            
+        except Exception as e:
+            logger.error(f"❌ Error starting userbot: {e}")
+        
     asyncio.run(start_userbot())
 
 threading.Thread(target=run_userbot, daemon=True).start()
@@ -177,6 +179,7 @@ def webhook_endpoint():
 if __name__ == "__main__":
     logger.info(f"🌐 Running Flask server on port {PORT}")
     flask_app.run(host="0.0.0.0", port=PORT)
+
 
 
 
