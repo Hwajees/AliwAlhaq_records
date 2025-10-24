@@ -151,8 +151,9 @@ async def archive_to_channel(user_id, message):
 def run_userbot():
     async def start_userbot():
         async with app_client:
-            logger.info("🚀 Userbot started and ready (Webhook-style mode)")
-            await asyncio.Event().wait()  # يبقى شغال للأبد بدون polling
+            logger.info("🚀 Userbot started and ready (Polling in background mode)")
+            await app_client.start()
+            await app_client.idle()
 
     asyncio.run(start_userbot())
 
@@ -177,3 +178,4 @@ def webhook_endpoint():
 if __name__ == "__main__":
     logger.info(f"🌐 Running Flask server on port {PORT}")
     flask_app.run(host="0.0.0.0", port=PORT)
+
