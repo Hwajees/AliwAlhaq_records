@@ -1,5 +1,6 @@
-pyrogram==2.0.106
+pyrogram==2.1.0
 tgcrypto==1.2.5
 flask==3.0.3
 mutagen==1.46.0
+
 
