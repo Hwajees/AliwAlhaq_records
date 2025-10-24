@@ -3,18 +3,21 @@ import os
 import asyncio
 import logging
 import threading
-from flask import Flask, request, jsonify
 from datetime import datetime, timedelta
+from flask import Flask, jsonify, request
 from pyrogram import Client, filters
 from pyrogram.enums import ChatMembersFilter
 from mutagen import File as MutagenFile  # لاستخراج مدة المقطع
 
 # -----------------------------
-# الإعدادات الأساسية
+# إعداد السجلات
 # -----------------------------
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("userbot")
 
+# -----------------------------
+# المتغيرات البيئية
+# -----------------------------
 API_ID = int(os.environ.get("API_ID"))
 API_HASH = os.environ.get("API_HASH")
 SESSION_STRING = os.environ.get("SESSION_STRING")
@@ -24,7 +27,7 @@ USERNAME = os.environ.get("USERNAME")
 PORT = int(os.environ.get("PORT", 10000))
 
 # -----------------------------
-# إنشاء Pyrogram Client
+# إنشاء عميل Pyrogram
 # -----------------------------
 app_client = Client(
     "userbot",
@@ -34,22 +37,28 @@ app_client = Client(
 )
 
 # -----------------------------
-# تهيئة Flask
+# Flask لإبقاء Render مستيقظ
 # -----------------------------
 flask_app = Flask(__name__)
 
 @flask_app.route("/")
 def home():
-    return "✅ Userbot Flask server running and healthy!"
+    return "✅ Userbot is running and healthy!"
+
+@flask_app.route("/webhook", methods=["POST"])
+def webhook_test():
+    data = request.get_json(silent=True)
+    logger.info(f"📩 Received webhook data: {data}")
+    return jsonify({"status": "received"}), 200
 
 # -----------------------------
-# حالة المستخدمين المؤقتة
+# الحالة المؤقتة للمستخدمين
 # -----------------------------
 user_states = {}
 ALLOWED_COMMANDS = ["الارشيف", "الأرشيف"]
 
 # -----------------------------
-# وظائف Pyrogram (نفس السابق)
+# التحقق من صلاحيات المشرف
 # -----------------------------
 async def is_user_admin(chat_id, user_id):
     try:
@@ -61,29 +70,41 @@ async def is_user_admin(chat_id, user_id):
         logger.error(f"Error checking admin: {e}")
         return False
 
-
+# -----------------------------
+# أمر الأرشفة في المجموعة
+# -----------------------------
 @app_client.on_message(filters.chat(GROUP_ID) & filters.text)
 async def handle_archive_command(client, message):
     if message.text.strip() not in ALLOWED_COMMANDS:
         return
+
     user = message.from_user
     if not user:
         return
+
     if not await is_user_admin(GROUP_ID, user.id):
         return
+
     private_url = f"https://t.me/{USERNAME}?start=archive_{user.id}"
     caption = f"تم استلام طلب أرشفة المقطع ✅\nاضغط هنا للمحادثة الخاصة مع البوت: {private_url}"
+
     await message.reply_text(caption, disable_web_page_preview=True)
+    logger.info(f"📥 Archive command received from {user.id}")
 
-
+# -----------------------------
+# استقبال الملفات الصوتية في الخاص
+# -----------------------------
 @app_client.on_message(filters.private & (filters.audio | filters.voice))
 async def receive_audio_private(client, message):
     user_id = message.from_user.id
     file_path = await message.download()
     user_states[user_id] = {'file': file_path}
     await message.reply_text("✅ تم استلام المقطع الصوتي الخاص بك.\nالآن أرسل عنوان المقطع:")
+    logger.info(f"🎧 Received audio from user {user_id}")
 
-
+# -----------------------------
+# استقبال العنوان واسم المتحدث
+# -----------------------------
 @app_client.on_message(filters.private & filters.text)
 async def receive_text_private(client, message):
     user_id = message.from_user.id
@@ -103,7 +124,9 @@ async def receive_text_private(client, message):
         await archive_to_channel(user_id, message)
         return
 
-
+# -----------------------------
+# دالة الأرشفة للقناة
+# -----------------------------
 async def archive_to_channel(user_id, message):
     state = user_states.get(user_id)
     if not state:
@@ -115,13 +138,15 @@ async def archive_to_channel(user_id, message):
     speaker = state['speaker']
     date = datetime.now().strftime('%Y-%m-%d %H:%M')
 
+    # حساب مدة المقطع
     try:
         audio = MutagenFile(file_path)
         duration_seconds = int(audio.info.length)
         duration_text = str(timedelta(seconds=duration_seconds))
         if duration_seconds < 3600:
             duration_text = "00:" + ":".join(duration_text.split(":")[-2:])
-    except:
+    except Exception as e:
+        logger.warning(f"⚠️ Failed to read duration: {e}")
         duration_text = "00:00:00"
 
     caption = (
@@ -139,47 +164,38 @@ async def archive_to_channel(user_id, message):
             caption=caption
         )
         await message.reply_text("✅ تم أرشفة المقطع بنجاح في القناة.")
+        logger.info(f"✅ Archived audio from user {user_id} to channel @{CHANNEL_ID}")
     except Exception as e:
         await message.reply_text(f"❌ خطأ أثناء الأرشفة: {e}")
+        logger.error(f"❌ Error while sending audio: {e}")
 
-    os.remove(file_path)
+    # تنظيف الملفات المؤقتة
+    try:
+        os.remove(file_path)
+    except:
+        pass
     user_states.pop(user_id, None)
 
 # -----------------------------
-# Thread لتشغيل Pyrogram في الخلفية
+# تشغيل Pyrogram داخل Thread
 # -----------------------------
 def run_userbot():
     async def start_userbot():
-        async with app_client:
-            logger.info("🚀 Userbot connected and now polling messages...")
-            await asyncio.get_event_loop().create_future()
+        try:
+            await app_client.start()
+            logger.info("🚀 Userbot fully started and polling updates...")
+            await asyncio.get_event_loop().create_future()  # البقاء نشط دائمًا
         except Exception as e:
             logger.error(f"❌ Error starting userbot: {e}")
-        
+
     asyncio.run(start_userbot())
 
+# تشغيل اليوزربوت في خيط منفصل حتى لا يمنع Flask من العمل
 threading.Thread(target=run_userbot, daemon=True).start()
 
 # -----------------------------
-# Flask Webhook-style endpoint
-# -----------------------------
-@flask_app.route("/webhook", methods=["POST"])
-def webhook_endpoint():
-    """
-    هذا endpoint لا يتصل فعليًا مع Telegram،
-    لكنه يسمح لك بإرسال إشعارات أو اختبارات من خدمات خارجية مستقبلًا.
-    """
-    data = request.get_json(silent=True)
-    logger.info(f"📩 Webhook data received: {data}")
-    return jsonify({"status": "received"}), 200
-
-# -----------------------------
-# تشغيل Flask فقط
+# تشغيل Flask
 # -----------------------------
 if __name__ == "__main__":
     logger.info(f"🌐 Running Flask server on port {PORT}")
     flask_app.run(host="0.0.0.0", port=PORT)
-
-
-
-
